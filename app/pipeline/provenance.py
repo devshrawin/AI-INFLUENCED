@@ -68,6 +68,12 @@ def read_c2pa(data: bytes, mime: str, result: ProvenanceResult, trust_anchors_pe
         result.notes.append("C2PA library not installed; content credentials not checked.")
         return
     try:
+        supported = set(c2pa.Reader.get_supported_mime_types())
+    except Exception:
+        supported = set()
+    if supported and mime not in supported:
+        return  # format cannot carry C2PA (e.g. plain text)
+    try:
         reader = c2pa.Reader.try_create(mime, io.BytesIO(data), context=_c2pa_context(trust_anchors_pem))
     except Exception as exc:  # corrupt / unsupported manifest
         result.c2pa_present = True

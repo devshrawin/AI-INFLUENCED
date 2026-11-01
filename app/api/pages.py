@@ -1,10 +1,12 @@
 """HTML pages: upload form and result."""
 
 from fastapi import APIRouter, File, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 
 from app.api.templating import templates
 from app.config import get_settings
+from app.pipeline.orchestrator import analyze
 from app.pipeline.validate import ValidationError, validate_upload
 
 router = APIRouter()
@@ -24,4 +26,6 @@ async def check(request: Request, file: UploadFile = File(...)):
         vf = validate_upload(data, file.filename or "", settings)
     except ValidationError as exc:
         return templates.TemplateResponse(request, "_error.html", {"message": str(exc)}, status_code=400)
-    return templates.TemplateResponse(request, "_validated.html", {"f": vf})
+    # Model inference is slow and blocking: run it off the event loop.
+    result = await run_in_threadpool(analyze, vf, settings)
+    return templates.TemplateResponse(request, "_result.html", {"r": result, "settings": settings})

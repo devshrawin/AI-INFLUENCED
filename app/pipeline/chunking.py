@@ -21,25 +21,34 @@ class Chunk:
 def chunk_text(text: str, max_words: int = 384, max_chunks: int = 20, min_words: int = 40) -> list[Chunk]:
     """Greedy packing of sentences into chunks of <= max_words words.
 
+    Chunks end at paragraph breaks when they are at least half full.
+
     A trailing chunk shorter than `min_words` is merged into the previous one
     (very short pieces give unreliable scores).
     """
-    sentences: list[tuple[str, int]] = []
+    # (sentence, start offset, starts a new paragraph?)
+    sentences: list[tuple[str, int, bool]] = []
     for para_match in re.finditer(r"[^\n]+", text):
         para, offset = para_match.group(0), para_match.start()
         pos = 0
+        first = True
         for sent in _SENTENCE_END.split(para):
             if sent.strip():
                 idx = para.find(sent, pos)
-                sentences.append((sent.strip(), offset + max(idx, 0)))
+                sentences.append((sent.strip(), offset + max(idx, 0), first))
                 pos = max(idx, 0) + len(sent)
+                first = False
 
     chunks: list[Chunk] = []
     cur: list[str] = []
     cur_words = 0
     cur_start = 0
-    for sent, start in sentences:
+    for sent, start, new_para in sentences:
         words = len(sent.split())
+        # Prefer to end a chunk at a paragraph break once it is half full.
+        if new_para and cur and cur_words >= max_words // 2:
+            chunks.append(Chunk(len(chunks), " ".join(cur), cur_words, cur_start))
+            cur, cur_words = [], 0
         # Very long "sentence" (no punctuation): hard-split by words.
         if words > max_words:
             parts = sent.split()

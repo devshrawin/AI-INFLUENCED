@@ -1,0 +1,74 @@
+{# Result card. `r` is an AnalysisResult. #}
+{% set css = {"AI (provenance-confirmed)": "ai", "Likely AI": "ai", "Not sure": "unsure",
+              "Likely Human": "human", "Cannot assess": "unknown"}[r.label] %}
+<article class="result {{ css }}">
+  <header>
+    <div class="score-row">
+      <div class="score">{% if r.final_score is not none %}{{ "%.0f"|format(r.final_score) }}%{% else %}–{% endif %}</div>
+      <div>
+        <div class="label">{{ r.label }}</div>
+        <div class="reason">{{ r.reason }}</div>
+      </div>
+    </div>
+    {% if r.final_score is not none %}
+    <div class="bar" role="img" aria-label="AI likelihood {{ r.final_score }} percent">
+      <span style="width: {{ r.final_score }}%"></span>
+      <i style="left: {{ settings.threshold_human }}%"></i><i style="left: {{ settings.threshold_ai }}%"></i>
+    </div>
+    <small>0 = human-like · {{ settings.threshold_human|int }}–{{ settings.threshold_ai|int }} = not sure · 100 = AI-like</small>
+    {% endif %}
+  </header>
+
+  <p class="disclaimer"><strong>{{ r.disclaimer }}</strong></p>
+
+  {% if r.warnings %}
+  <div class="warnings">
+    {% for w in r.warnings %}<p>⚠ {{ w }}</p>{% endfor %}
+  </div>
+  {% endif %}
+
+  <h4>How the score was reached</h4>
+  <ul>{% for line in r.explanation %}<li>{{ line }}</li>{% endfor %}</ul>
+
+  <h4>Signals</h4>
+  <div class="overflow-auto">
+  <table class="striped">
+    <thead><tr><th>Signal</th><th>Applies to</th><th>Score</th><th>Weight</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for s in r.signals %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{{ s.target }}</td>
+        <td>{% if s.score is not none %}{{ "%.0f"|format(s.score) }}%{% else %}<em>info</em>{% endif %}</td>
+        <td>{% if s.weight %}{{ "%.2f"|format(s.weight) }}{% else %}–{% endif %}</td>
+        <td><small>{{ s.detail }}</small></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% if r.chunks|length > 1 %}
+  <h4>Most AI-like sections</h4>
+  {% for c in r.top_chunks %}
+    <blockquote><strong>Section {{ c.index }} — {{ "%.0f"|format(c.score) }}%</strong> ({{ c.words }} words)<br>{{ c.excerpt }}</blockquote>
+  {% endfor %}
+  <details><summary>All {{ r.chunks|length }} sections</summary>
+    <table><tbody>{% for c in r.chunks %}<tr><td>Section {{ c.index }}</td><td>{{ "%.0f"|format(c.score) }}%</td><td><small>{{ c.excerpt }}</small></td></tr>{% endfor %}</tbody></table>
+  </details>
+  {% endif %}
+
+  <details><summary>File details</summary>
+    <ul>
+      <li>File: {{ r.filename }} ({{ r.kind }}, {{ r.size }} bytes)</li>
+      <li>SHA-256: <code>{{ r.sha256 }}</code></li>
+      <li>Virus scan: {{ r.av_status }}</li>
+      {% if r.language %}<li>Language: {{ r.language.name }} (confidence {{ r.language.confidence }})</li>{% endif %}
+      <li>Processing time: {{ r.duration_s }} s</li>
+      {% for mid, ver in r.model_versions().items() %}<li>Model: <code>{{ mid }}</code> @ {{ ver }}</li>{% endfor %}
+    </ul>
+    {% if r.metadata %}
+    <table><tbody>{% for k, v in r.metadata.items() %}<tr><td><code>{{ k }}</code></td><td><small>{{ v }}</small></td></tr>{% endfor %}</tbody></table>
+    {% endif %}
+  </details>
+</article>

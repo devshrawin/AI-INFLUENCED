@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     weight_image_secondary: float = 0.4
     weight_text_binoculars: float = 0.5
     weight_text_classifier: float = 0.5
+    # Documents: share of the final score for the text vs. embedded images.
+    weight_document_text: float = 0.7
+    weight_document_images: float = 0.3
     # Max points a weak metadata hint (e.g. "Software: Midjourney") may add.
     metadata_hint_bonus: float = 15.0
 

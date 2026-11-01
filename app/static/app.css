@@ -1,3 +1,19 @@
 .htmx-indicator { display: none; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
-.error { border-left: 4px solid #c84f48; }
+.error { border-left: 6px solid #c84f48; }
+
+.result { border-left: 8px solid #8891a4; }
+.result.ai { border-left-color: #c84f48; }
+.result.unsure { border-left-color: #d4a017; }
+.result.human { border-left-color: #3c8d5a; }
+.score-row { display: flex; gap: 1.5rem; align-items: center; }
+.score { font-size: 3rem; font-weight: 700; line-height: 1; }
+.label { font-size: 1.4rem; font-weight: 600; }
+.reason { opacity: .85; }
+.bar { position: relative; height: 12px; border-radius: 6px; margin: 1rem 0 .25rem;
+       background: linear-gradient(90deg, #3c8d5a, #d4a017 50%, #c84f48); }
+.bar span { position: absolute; top: -4px; height: 20px; border-right: 4px solid currentColor; }
+.bar i { position: absolute; top: 0; bottom: 0; border-left: 1px dashed rgba(0,0,0,.5); }
+.disclaimer { padding: .5rem 1rem; background: rgba(212,160,23,.15); border-radius: 4px; }
+.warnings p { margin: .25rem 0; color: #a0670b; }
+td small { word-break: break-word; }
