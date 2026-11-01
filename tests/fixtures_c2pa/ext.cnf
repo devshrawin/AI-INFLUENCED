@@ -1,0 +1,10 @@
+[leaf]
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature
+extendedKeyUsage=emailProtection
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid
+[ca]
+basicConstraints=critical,CA:TRUE
+keyUsage=critical,keyCertSign,cRLSign
+subjectKeyIdentifier=hash

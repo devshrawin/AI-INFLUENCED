@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     clamav_socket: str = "/var/run/clamav/clamd.ctl"
     clamav_required: bool = False  # if True, reject uploads when ClamAV is down
 
+    # --- Provenance ------------------------------------------------------
+    # Optional PEM file of trusted C2PA root certificates (copy the official
+    # C2PA trust list here). Without it, signatures are still verified but
+    # the signer is reported as "not on local trust list".
+    c2pa_trust_anchors_file: Path | None = None
+
     # --- Labels / thresholds (percent) ---------------------------------------
     threshold_ai: float = 70.0  # score >= this -> "Likely AI"
     threshold_human: float = 30.0  # score < this  -> "Likely Human"
