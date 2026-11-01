@@ -10,3 +10,4 @@ __pycache__/
 /dist/
 *.db
 eval/reports/
+tests/.tmp_uploads/

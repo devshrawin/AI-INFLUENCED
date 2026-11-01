@@ -17,3 +17,11 @@
 .disclaimer { padding: .5rem 1rem; background: rgba(212,160,23,.15); border-radius: 4px; }
 .warnings p { margin: .25rem 0; color: #a0670b; }
 td small { word-break: break-word; }
+form.inline { display: inline-flex; gap: .25rem; align-items: center; margin: 0 .25rem .25rem 0; }
+form.inline input, form.inline select { margin: 0; padding: .25rem .5rem; height: auto; width: auto; }
+button.small, .small { padding: .25rem .6rem; font-size: .85rem; }
+.narrow { max-width: 28rem; margin: 2rem auto; }
+.error-text { color: #c84f48; }
+.ok-text { color: #3c8d5a; }
+.pager { display: flex; gap: 1rem; justify-content: center; }
+.brand { text-decoration: none; }

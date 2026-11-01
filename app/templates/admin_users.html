@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Users</h2>
+{% if error %}<p class="error-text">{{ error }}</p>{% endif %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Login</th><th>Status</th><th>Last login (UTC)</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for u in rows %}
+  <tr>
+    <td>{{ u.username }}</td><td>{{ u.full_name }}</td><td>{{ u.role }}</td><td>{{ u.auth_source }}</td>
+    <td>{% if u.is_active %}active{% else %}<strong>disabled</strong>{% endif %}</td>
+    <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "never" }}</td>
+    <td>
+      {% if u.id != user.id %}
+      <form method="post" action="/admin/users/{{ u.id }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <input type="hidden" name="action" value="set_role">
+        <select name="role" aria-label="Role">{% for r in roles %}<option {% if r == u.role %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+        <button class="small outline">Set role</button>
+      </form>
+      <form method="post" action="/admin/users/{{ u.id }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <input type="hidden" name="action" value="{{ 'deactivate' if u.is_active else 'activate' }}">
+        <button class="small outline secondary">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+      </form>
+      {% if u.auth_source == "local" %}
+      <form method="post" action="/admin/users/{{ u.id }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <input type="hidden" name="action" value="reset_password">
+        <input type="password" name="password" placeholder="Temporary password" minlength="10" required aria-label="Temporary password">
+        <button class="small outline secondary">Reset password</button>
+      </form>
+      {% endif %}
+      {% else %}<em>you</em>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<article>
+  <h3>Add user</h3>
+  <form method="post" action="/admin/users">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="grid">
+      <label>Username <input name="username" required pattern="[A-Za-z0-9._]+"></label>
+      <label>Full name <input name="full_name"></label>
+    </div>
+    <div class="grid">
+      <label>Role <select name="role">{% for r in roles %}<option>{{ r }}</option>{% endfor %}</select></label>
+      <label>Login type <select name="auth_source"><option value="local">Local password</option><option value="ldap">Department directory (LDAP)</option></select></label>
+      <label>Temporary password (local only) <input type="password" name="password" minlength="10"></label>
+    </div>
+    <button type="submit">Create user</button>
+    <small>Local users must change the temporary password at first login.</small>
+  </form>
+</article>
+{% endblock %}

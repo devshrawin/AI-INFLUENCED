@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Audit entry #{{ row.id }}</h2>
+<table>
+  <tbody>
+    <tr><th>When (UTC)</th><td>{{ row.created_at }}</td></tr>
+    <tr><th>User / IP</th><td>{{ row.username }} / {{ row.client_ip }}</td></tr>
+    <tr><th>File</th><td>{{ row.file_name }} ({{ row.file_type }}, {{ row.file_size }} bytes)</td></tr>
+    <tr><th>SHA-256</th><td><code>{{ row.sha256 }}</code></td></tr>
+    <tr><th>Result</th><td>{% if row.final_score is not none %}{{ "%.1f"|format(row.final_score) }}% – {% endif %}{{ row.label }}</td></tr>
+    <tr><th>Virus scan</th><td>{{ row.av_status }}</td></tr>
+    <tr><th>Stored file</th><td>{{ row.stored_path or "not stored / deleted by retention" }}</td></tr>
+    <tr><th>Processing time</th><td>{{ row.duration_s }} s</td></tr>
+  </tbody>
+</table>
+<h4>Signals, model versions and warnings</h4>
+<pre>{{ pretty }}</pre>
+<a href="/admin/audit">← Back to audit log</a>
+{% endblock %}

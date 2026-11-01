@@ -8,11 +8,28 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
 </head>
-<body>
+{# Every HTMX request carries the CSRF token as a header. #}
+<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
   <header class="container">
     <nav>
-      <ul><li><strong>AI Content Indicator</strong></li></ul>
-      <ul>{% block nav %}{% endblock %}</ul>
+      <ul><li><a href="/" class="brand"><strong>AI Content Indicator</strong></a></li></ul>
+      {% if user %}
+      <ul>
+        <li><a href="/">Check</a></li>
+        <li><a href="/history">My checks</a></li>
+        {% if user.is_admin %}
+        <li><a href="/admin/audit">Audit log</a></li>
+        <li><a href="/admin/users">Users</a></li>
+        {% endif %}
+        <li><a href="/account/password">{{ user.username }}</a></li>
+        <li>
+          <form method="post" action="/logout" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button type="submit" class="secondary outline small">Log out</button>
+          </form>
+        </li>
+      </ul>
+      {% endif %}
     </nav>
   </header>
   <main class="container">{% block content %}{% endblock %}</main>
