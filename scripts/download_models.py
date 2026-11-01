@@ -29,6 +29,9 @@ MODELS = {
     "Qwen/Qwen2.5-1.5B-Instruct": ("binoculars", "apache-2.0"),
 }
 
+# Training checkpoints are duplicates of the final weights; skip them.
+IGNORE_PATTERNS = ["checkpoint-*/*", "*.bin", "*.onnx", "*.h5", "*.msgpack"]
+
 # Only weights/config/tokenizer files; skip duplicate formats (.bin, onnx...).
 ALLOW_PATTERNS = [
     "*.json",
@@ -80,11 +83,17 @@ def main() -> int:
         info = api.model_info(repo_id)
         target = dest / folder_name(repo_id)
         print(f"-> {repo_id} @ {info.sha[:10]}  ->  {target}")
-        snapshot_download(repo_id, revision=info.sha, local_dir=target, allow_patterns=ALLOW_PATTERNS)
+        snapshot_download(
+            repo_id,
+            revision=info.sha,
+            local_dir=target,
+            allow_patterns=ALLOW_PATTERNS,
+            ignore_patterns=IGNORE_PATTERNS,
+        )
         files = {
             str(p.relative_to(target)): sha256_file(p)
             for p in sorted(target.rglob("*"))
-            if p.is_file() and ".cache" not in p.parts
+            if p.is_file() and ".cache" not in p.parts and p.name != "trainer_state.json"
         }
         manifest["models"][folder_name(repo_id)] = {
             "repo_id": repo_id,
