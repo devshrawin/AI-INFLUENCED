@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     enable_image_detectors: bool = True
     enable_text_classifier: bool = True
     enable_binoculars: bool = True
+    # Binoculars score at which P(AI)=50%, and curve spread. Calibrated for the
+    # Qwen2.5-1.5B pair on a public human/ChatGPT sample (about 5% false
+    # positives); re-run eval/calibrate_binoculars.py on local data.
+    binoculars_threshold: float = 0.90
+    binoculars_scale: float = 0.04
     device: str = "auto"  # auto | cpu | cuda
     chunk_tokens: int = 384  # words per text chunk (approx.)
     max_chunks: int = 20
