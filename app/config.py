@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     binoculars_threshold: float = 0.90
     binoculars_scale: float = 0.04
     device: str = "auto"  # auto | cpu | cuda
+    preload_models: bool = False  # load all models at start-up (prod: true)
     chunk_tokens: int = 384  # words per text chunk (approx.)
     max_chunks: int = 20
     min_words_for_text_score: int = 40

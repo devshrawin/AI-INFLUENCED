@@ -1,0 +1,14 @@
+# Add on top of docker-compose.yml on servers with an NVIDIA GPU
+# (needs the NVIDIA Container Toolkit and an image built with a CUDA torch):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+services:
+  app:
+    environment:
+      DEVICE: cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

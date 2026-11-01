@@ -11,3 +11,5 @@ __pycache__/
 *.db
 eval/reports/
 tests/.tmp_uploads/
+docker/certs/
+clamav-db/

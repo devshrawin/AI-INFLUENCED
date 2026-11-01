@@ -1,0 +1,13 @@
+.git
+.venv
+models
+data
+dist
+tests
+eval
+docs
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.env
+docker/certs

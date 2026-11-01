@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -68,6 +69,19 @@ def bootstrap_admin(settings: Settings) -> None:
         log.warning("Created bootstrap admin '%s'. Change its password now.", settings.bootstrap_admin_user)
 
 
+def preload_models() -> None:
+    """Load every enabled model in the background so the first check is fast."""
+    from app.pipeline.detectors import registry
+    from app.pipeline.detectors.base import ModelUnavailable
+
+    for det, _ in registry.image_detectors() + registry.text_detectors():
+        try:
+            det.ensure_loaded()
+            log.info("Loaded %s (%s)", det.name, det.model_id)
+        except ModelUnavailable as exc:
+            log.error("%s not available: %s", det.name, exc)
+
+
 def create_app(start_background: bool = True) -> FastAPI:
     settings = get_settings()
     check_settings(settings)
@@ -81,6 +95,8 @@ def create_app(start_background: bool = True) -> FastAPI:
         if start_background:
             worker = RetentionWorker(settings)
             worker.start()
+            if settings.preload_models:
+                threading.Thread(target=preload_models, name="preload", daemon=True).start()
         yield
         if worker:
             worker.stop_event.set()
@@ -101,8 +117,6 @@ def create_app(start_background: bool = True) -> FastAPI:
         response = await call_next(request)
         for key, value in SECURITY_HEADERS.items():
             response.headers.setdefault(key, value)
-        if settings.cookie_secure:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         return response
 
     @app.exception_handler(LoginRequired)
