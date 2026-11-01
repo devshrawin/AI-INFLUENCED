@@ -3,34 +3,34 @@
 <h2>Audit log</h2>
 <form method="get" action="/admin/audit" class="filters">
   <div class="grid">
-    <input name="q" value="{{ f.q }}" placeholder="User, file name or SHA-256" aria-label="Search">
+    <input name="q" value="{{ f.q }}" placeholder="Application, applicant, user, file or SHA-256" aria-label="Search">
     <select name="event" aria-label="Event">
       <option value="">All events</option>
       {% for e in ["check", "rejected", "login", "login_failed", "login_locked", "logout", "password_changed", "user_created", "user_set_role", "user_deactivate", "user_activate", "user_reset_password"] %}
       <option {% if e == f.event %}selected{% endif %}>{{ e }}</option>{% endfor %}
     </select>
-    <select name="label" aria-label="Label">
-      <option value="">All labels</option>
-      {% for l in ["AI (provenance-confirmed)", "Likely AI", "Not sure", "Likely Human", "Cannot assess"] %}
-      <option {% if l == f.label %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    <select name="level" aria-label="Result">
+      <option value="">All results</option>
+      {% for l in ["high", "review", "none"] %}
+      <option {% if l == f.level %}selected{% endif %}>{{ l }}</option>{% endfor %}
     </select>
     <input type="date" name="date_from" value="{{ f.date_from }}" aria-label="From">
     <input type="date" name="date_to" value="{{ f.date_to }}" aria-label="To">
   </div>
   <button type="submit">Filter</button>
-  <a href="/admin/audit.csv?q={{ f.q|urlencode }}&event={{ f.event|urlencode }}&label={{ f.label|urlencode }}&date_from={{ f.date_from }}&date_to={{ f.date_to }}" role="button" class="secondary outline">Export CSV</a>
+  <a href="/admin/audit.csv?q={{ f.q|urlencode }}&event={{ f.event|urlencode }}&level={{ f.level|urlencode }}&date_from={{ f.date_from }}&date_to={{ f.date_to }}" role="button" class="secondary outline">Export CSV</a>
 </form>
 <p>{{ total }} entries</p>
 <div class="overflow-auto">
 <table class="striped">
-  <thead><tr><th>When (UTC)</th><th>Event</th><th>User</th><th>IP</th><th>File</th><th>SHA-256</th><th>Score</th><th>Label</th><th></th></tr></thead>
+  <thead><tr><th>When (UTC)</th><th>Event</th><th>User</th><th>Application</th><th>File</th><th>SHA-256</th><th>Result</th><th></th></tr></thead>
   <tbody>
   {% for r in rows %}
   <tr>
-    <td>{{ r.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td><td>{{ r.event }}</td><td>{{ r.username }}</td><td>{{ r.client_ip }}</td>
+    <td>{{ r.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td><td>{{ r.event }}</td><td>{{ r.username }}<br><small>{{ r.client_ip }}</small></td><td>{{ r.application_id }}{% if r.applicant_id %}<br><small>{{ r.applicant_id }}</small>{% endif %}</td>
     <td>{{ r.file_name }}{% if r.detail %}<br><small>{{ r.detail }}</small>{% endif %}</td>
     <td>{% if r.sha256 %}<code title="{{ r.sha256 }}">{{ r.sha256[:12] }}</code>{% endif %}</td>
-    <td>{% if r.final_score is not none %}{{ "%.0f"|format(r.final_score) }}%{% endif %}</td><td>{{ r.label }}</td>
+    <td>{% if r.flag_level %}<span class="pill pill-{{ r.flag_level }}">{{ r.flag_level }}</span>{% endif %}</td>
     <td>{% if r.event == "check" %}<a href="/admin/audit/{{ r.id }}">details</a>{% endif %}</td>
   </tr>
   {% endfor %}
@@ -38,8 +38,8 @@
 </table>
 </div>
 <nav class="pager">
-  {% if page > 1 %}<a href="?q={{ f.q|urlencode }}&event={{ f.event|urlencode }}&label={{ f.label|urlencode }}&date_from={{ f.date_from }}&date_to={{ f.date_to }}&page={{ page - 1 }}">← Newer</a>{% endif %}
+  {% if page > 1 %}<a href="?q={{ f.q|urlencode }}&event={{ f.event|urlencode }}&level={{ f.level|urlencode }}&date_from={{ f.date_from }}&date_to={{ f.date_to }}&page={{ page - 1 }}">← Newer</a>{% endif %}
   <span>Page {{ page }} of {{ pages }}</span>
-  {% if page < pages %}<a href="?q={{ f.q|urlencode }}&event={{ f.event|urlencode }}&label={{ f.label|urlencode }}&date_from={{ f.date_from }}&date_to={{ f.date_to }}&page={{ page + 1 }}">Older →</a>{% endif %}
+  {% if page < pages %}<a href="?q={{ f.q|urlencode }}&event={{ f.event|urlencode }}&level={{ f.level|urlencode }}&date_from={{ f.date_from }}&date_to={{ f.date_to }}&page={{ page + 1 }}">Older →</a>{% endif %}
 </nav>
 {% endblock %}

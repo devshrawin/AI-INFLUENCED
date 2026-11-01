@@ -23,14 +23,13 @@ log = logging.getLogger(__name__)
 
 # Our internal short names for each accepted type.
 IMAGE_KINDS = {"jpeg", "png", "webp"}
-DOCUMENT_KINDS = {"pdf", "docx", "txt"}
+DOCUMENT_KINDS = {"pdf", "docx"}
 
 _MIME_TO_KIND = {
     "application/pdf": "pdf",
     "image/jpeg": "jpeg",
     "image/png": "png",
     "image/webp": "webp",
-    "text/plain": "txt",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 }
 
@@ -92,14 +91,6 @@ def _check_image(data: bytes) -> None:
         raise ValidationError("The image file is damaged and cannot be read.") from exc
 
 
-def _is_text(data: bytes) -> bool:
-    try:
-        data.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
-    return b"\x00" not in data
-
-
 def detect_kind(data: bytes) -> tuple[str, str]:
     """Return (kind, mime) from magic bytes or raise ValidationError."""
     mime = magic.from_buffer(data[:8192] if len(data) > 8192 else data, mime=True)
@@ -108,12 +99,9 @@ def detect_kind(data: bytes) -> tuple[str, str]:
         return "docx", DOCX_MIME
     if mime == DOCX_MIME:  # claims DOCX but structure is wrong
         raise ValidationError("The file claims to be a Word document but is damaged.")
-    # Anything text-ish that is valid UTF-8 is accepted as plain text.
-    if mime.startswith("text/") and _is_text(data):
-        return "txt", "text/plain"
     kind = _MIME_TO_KIND.get(mime)
-    if kind is None or kind == "txt":
-        raise ValidationError(f"Unsupported file type ({mime}). Allowed: PDF, DOCX, TXT, JPG, PNG, WEBP.")
+    if kind is None:
+        raise ValidationError(f"Unsupported file type ({mime}). Allowed: PDF, DOCX, JPG, PNG, WEBP.")
     return kind, mime
 
 

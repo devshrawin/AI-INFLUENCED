@@ -52,8 +52,22 @@ def new_session() -> Session:
     return _session_factory()()
 
 
+_INIT_LOCK_ID = 7_301_955  # any fixed number; identifies our start-up lock
+
+
 def init_db() -> None:
-    """Create tables if they do not exist (safe to run on every start)."""
+    """Create tables if they do not exist (safe to run on every start).
+
+    Several worker processes start at once; on PostgreSQL an advisory lock
+    makes them create the tables one after another instead of colliding."""
+    from sqlalchemy import text
+
     from app.db.models import Base
 
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": _INIT_LOCK_ID})
+            Base.metadata.create_all(conn)
+    else:
+        Base.metadata.create_all(engine)

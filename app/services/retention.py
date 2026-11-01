@@ -2,7 +2,7 @@
 
 Runs in a background thread inside the app (every 15 minutes) and can also
 be run by hand / cron:  python -m app.services.retention
-Only uploaded files are deleted; the audit log rows (hash, scores) remain.
+Only uploaded files are deleted; the audit log rows (hash, flags) remain.
 """
 
 from __future__ import annotations

@@ -17,8 +17,6 @@ def settings():
         ("sample.webp", "webp"),
         ("sample.pdf", "pdf"),
         ("sample.docx", "docx"),
-        ("human.txt", "txt"),
-        ("malayalam.txt", "txt"),
     ],
 )
 def test_accepts_supported_types(sample, settings, name, kind):
@@ -39,12 +37,17 @@ def test_rejects_executable_disguised_as_png(sample, settings):
 
 def test_rejects_empty(settings):
     with pytest.raises(ValidationError, match="empty"):
-        validate_upload(b"", "a.txt", settings)
+        validate_upload(b"", "a.png", settings)
+
+
+def test_rejects_plain_text(settings):
+    with pytest.raises(ValidationError, match="Unsupported"):
+        validate_upload(b"just some text " * 20, "a.txt", settings)
 
 
 def test_rejects_oversize(settings):
     with pytest.raises(ValidationError, match="limit"):
-        validate_upload(b"a" * (settings.max_upload_bytes + 1), "a.txt", settings)
+        validate_upload(b"a" * (settings.max_upload_bytes + 1), "a.png", settings)
 
 
 def test_rejects_plain_zip(settings):
@@ -60,13 +63,13 @@ def test_rejects_plain_zip(settings):
 
 def test_clamav_unavailable_not_required(sample):
     s = Settings(clamav_enabled=True, clamav_socket="/nonexistent.sock", clamav_required=False)
-    assert validate_upload(sample("human.txt"), "a.txt", s).av_status == "unavailable"
+    assert validate_upload(sample("sample.png"), "a.png", s).av_status == "unavailable"
 
 
 def test_clamav_unavailable_required_rejects(sample):
     s = Settings(clamav_enabled=True, clamav_socket="/nonexistent.sock", clamav_required=True)
     with pytest.raises(ValidationError, match="unavailable"):
-        validate_upload(sample("human.txt"), "a.txt", s)
+        validate_upload(sample("sample.png"), "a.png", s)
 
 
 def test_clamav_infected(monkeypatch, sample):
@@ -74,7 +77,7 @@ def test_clamav_infected(monkeypatch, sample):
 
     monkeypatch.setattr(clamav, "scan_bytes", lambda data, path: ("FOUND", "Eicar-Test-Signature"))
     with pytest.raises(ValidationError, match="Eicar"):
-        validate_upload(sample("human.txt"), "a.txt", Settings(clamav_enabled=True))
+        validate_upload(sample("sample.png"), "a.png", Settings(clamav_enabled=True))
 
 
 def test_clamav_protocol_against_fake_daemon(tmp_path):

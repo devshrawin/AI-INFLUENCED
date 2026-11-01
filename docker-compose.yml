@@ -1,4 +1,4 @@
-# AI Content Indicator - production stack for the State Data Centre.
+# Upload Integrity Check - production stack for the State Data Centre.
 #
 #   docker compose up -d                      # app + database + nginx
 #   docker compose --profile clamav up -d     # ... plus ClamAV virus scanner
@@ -17,7 +17,6 @@ services:
       DATABASE_URL: postgresql+psycopg://aci:${POSTGRES_PASSWORD}@db:5432/aci
       CLAMAV_SOCKET: /run/clamav/clamd.sock
     volumes:
-      - ./models:/models:ro
       - app-data:/data
       - clamav-socket:/run/clamav
     depends_on:
@@ -27,7 +26,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${APP_MEMORY_LIMIT:-14g}
+          memory: ${APP_MEMORY_LIMIT:-2g}
 
   db:
     image: postgres:16-alpine

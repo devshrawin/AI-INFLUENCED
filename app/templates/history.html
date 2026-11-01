@@ -3,11 +3,11 @@
 <h2>My recent checks</h2>
 <div class="overflow-auto">
 <table class="striped">
-  <thead><tr><th>When (UTC)</th><th>File</th><th>Type</th><th>Score</th><th>Label</th></tr></thead>
+  <thead><tr><th>When (UTC)</th><th>Application</th><th>Applicant</th><th>File</th><th>Result</th></tr></thead>
   <tbody>
   {% for r in rows %}
-    <tr><td>{{ r.created_at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ r.file_name }}</td><td>{{ r.file_type }}</td>
-        <td>{% if r.final_score is not none %}{{ "%.0f"|format(r.final_score) }}%{% else %}–{% endif %}</td><td>{{ r.label }}</td></tr>
+    <tr><td>{{ r.created_at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ r.application_id }}</td><td>{{ r.applicant_id }}</td>
+        <td>{{ r.file_name }}</td><td><span class="pill pill-{{ r.flag_level }}">{{ r.flag_level }}</span></td></tr>
   {% else %}
     <tr><td colspan="5">No checks yet.</td></tr>
   {% endfor %}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 ROLES = ("admin", "officer")
@@ -50,18 +50,38 @@ class AuditLog(Base):
     event: Mapped[str] = mapped_column(String(30), default="check", index=True)  # check | login | ...
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     username: Mapped[str] = mapped_column(String(150), default="")
+    application_id: Mapped[str] = mapped_column(String(100), default="", index=True)
+    applicant_id: Mapped[str] = mapped_column(String(100), default="", index=True)
     client_ip: Mapped[str] = mapped_column(String(64), default="")
     file_name: Mapped[str] = mapped_column(String(255), default="")
     sha256: Mapped[str] = mapped_column(String(64), default="", index=True)
     file_type: Mapped[str] = mapped_column(String(20), default="")
     file_size: Mapped[int] = mapped_column(Integer, default=0)
-    final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    label: Mapped[str] = mapped_column(String(40), default="")
-    # Per-signal scores, model versions, warnings: JSON, no document text.
-    scores: Mapped[dict] = mapped_column(JSON, default=dict)
-    model_versions: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Overall flag: high | review | none
+    flag_level: Mapped[str] = mapped_column(String(10), default="", index=True)
+    # The individual flags (codes, messages, matching applications) as JSON.
+    flags: Mapped[list] = mapped_column(JSON, default=list)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     av_status: Mapped[str] = mapped_column(String(20), default="")
     duration_s: Mapped[float] = mapped_column(Float, default=0.0)
     stored_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     detail: Mapped[str] = mapped_column(String(500), default="")  # for non-check events
+
+
+class Fingerprint(Base):
+    """One row per uploaded file (and per photo inside it) so later uploads can
+    be compared. Stores only hashes and IDs - never the image itself."""
+
+    __tablename__ = "fingerprints"
+    __table_args__ = (Index("ix_fp_kind_phash", "kind", "phash"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    application_id: Mapped[str] = mapped_column(String(100), index=True)
+    applicant_id: Mapped[str] = mapped_column(String(100), index=True)
+    scheme: Mapped[str] = mapped_column(String(100), default="")
+    file_name: Mapped[str] = mapped_column(String(255), default="")
+    part: Mapped[str] = mapped_column(String(50), default="file")  # file | embedded image N
+    kind: Mapped[str] = mapped_column(String(10))  # photo | document
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    phash: Mapped[str | None] = mapped_column(String(16), nullable=True)  # photos only

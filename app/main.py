@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import logging
-import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api import admin, auth, pages
+from app.api import admin, auth, pages, platform
 from app.api.limiter import limiter
 from app.api.templating import render
 from app.auth.passwords import hash_password
@@ -65,21 +66,12 @@ def bootstrap_admin(settings: Settings) -> None:
                 must_change_password=True,
             )
         )
-        db.commit()
-        log.warning("Created bootstrap admin '%s'. Change its password now.", settings.bootstrap_admin_user)
-
-
-def preload_models() -> None:
-    """Load every enabled model in the background so the first check is fast."""
-    from app.pipeline.detectors import registry
-    from app.pipeline.detectors.base import ModelUnavailable
-
-    for det, _ in registry.image_detectors() + registry.text_detectors():
         try:
-            det.ensure_loaded()
-            log.info("Loaded %s (%s)", det.name, det.model_id)
-        except ModelUnavailable as exc:
-            log.error("%s not available: %s", det.name, exc)
+            db.commit()
+        except IntegrityError:  # another worker process created it at the same moment
+            db.rollback()
+            return
+        log.warning("Created bootstrap admin '%s'. Change its password now.", settings.bootstrap_admin_user)
 
 
 def create_app(start_background: bool = True) -> FastAPI:
@@ -95,8 +87,6 @@ def create_app(start_background: bool = True) -> FastAPI:
         if start_background:
             worker = RetentionWorker(settings)
             worker.start()
-            if settings.preload_models:
-                threading.Thread(target=preload_models, name="preload", daemon=True).start()
         yield
         if worker:
             worker.stop_event.set()
@@ -134,18 +124,33 @@ def create_app(start_background: bool = True) -> FastAPI:
             )
         return RedirectResponse("/account/password", status_code=303)
 
+    def is_api(request: Request) -> bool:
+        return request.url.path.startswith("/api/")
+
     @app.exception_handler(RateLimitExceeded)
     async def too_many(request: Request, _exc):
+        if is_api(request):
+            return JSONResponse({"error": "Rate limit exceeded."}, status_code=429)
         return render(request, "_error.html", {"message": "Too many requests. Please wait a minute."}, 429)
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException):
+        if is_api(request):
+            return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
         return render(request, "_error.html", {"message": exc.detail}, exc.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def bad_request(request: Request, exc: RequestValidationError):
+        if is_api(request):
+            fields = sorted({".".join(str(p) for p in e["loc"][1:]) for e in exc.errors()})
+            return JSONResponse({"error": "Missing or invalid fields: " + ", ".join(fields)}, status_code=422)
+        return render(request, "_error.html", {"message": "Please fill in all required fields."}, 422)
 
     app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
     app.include_router(auth.router)
     app.include_router(pages.router)
     app.include_router(admin.router)
+    app.include_router(platform.router)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz():

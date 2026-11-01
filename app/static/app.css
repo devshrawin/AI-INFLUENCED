@@ -25,3 +25,11 @@ button.small, .small { padding: .25rem .6rem; font-size: .85rem; }
 .ok-text { color: #3c8d5a; }
 .pager { display: flex; gap: 1rem; justify-content: center; }
 .brand { text-decoration: none; }
+.flags { list-style: none; padding-left: 0; }
+.flags li { list-style: none; padding: .6rem .8rem; margin-bottom: .5rem; border-radius: 4px; }
+.flag-high { background: rgba(200,79,72,.12); border-left: 4px solid #c84f48; }
+.flag-review { background: rgba(212,160,23,.14); border-left: 4px solid #d4a017; }
+.pill { padding: .1rem .5rem; border-radius: 999px; font-size: .85rem; }
+.pill-high { background: #c84f48; color: #fff; }
+.pill-review { background: #d4a017; color: #000; }
+.pill-none { background: #3c8d5a; color: #fff; }

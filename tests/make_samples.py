@@ -38,18 +38,49 @@ def make_image(path: Path, fmt: str) -> None:
     img.save(path, fmt)
 
 
+def make_photo(path: Path, seed: int) -> None:
+    """A busy, colourful 'photo' (stands in for e.g. a flood-damage picture)."""
+    import random
+
+    r = random.Random(seed)
+    img = Image.new("RGB", (1024, 768), (r.randint(0, 120),) * 3)
+    d = ImageDraw.Draw(img)
+    for _ in range(80):
+        x, y = r.randint(-100, 1000), r.randint(-100, 740)
+        colour = tuple(r.randint(0, 255) for _ in range(3))
+        d.ellipse((x, y, x + r.randint(30, 400), y + r.randint(30, 300)), fill=colour)
+    img.save(path, "JPEG", quality=90)
+
+
+def make_marksheet(path: Path, name: str, marks: list[int]) -> None:
+    """A simple marksheet-like document image: same layout, different contents."""
+    img = Image.new("RGB", (1240, 1754), "white")
+    d = ImageDraw.Draw(img)
+    d.rectangle((40, 40, 1200, 1714), outline="black", width=4)
+    d.text((380, 90), "BOARD OF HIGHER SECONDARY EXAMINATIONS", fill="black")
+    d.text((480, 140), "STATEMENT OF MARKS 2026", fill="black")
+    d.text((80, 240), f"Name: {name}", fill="black")
+    y = 380
+    for subject, mark in zip(
+        ["English", "Malayalam", "Physics", "Chemistry", "Mathematics", "Biology"], marks, strict=True
+    ):
+        d.rectangle((80, y, 1160, y + 70), outline="black", width=2)
+        d.text((100, y + 25), subject, fill="black")
+        d.text((900, y + 25), str(mark), fill="black")
+        y += 70
+    d.text((700, y + 40), f"TOTAL: {sum(marks)}", fill="black")
+    img.save(path, "PNG")
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     make_image(OUT / "sample.png", "PNG")
     make_image(OUT / "sample.jpg", "JPEG")
     make_image(OUT / "sample.webp", "WEBP")
-    (OUT / "human.txt").write_text(HUMAN_TEXT, encoding="utf-8")
-    (OUT / "ai.txt").write_text(AI_TEXT, encoding="utf-8")
-    (OUT / "malayalam.txt").write_text(
-        "കേരളം ഇന്ത്യയുടെ തെക്കുപടിഞ്ഞാറൻ തീരത്തുള്ള ഒരു സംസ്ഥാനമാണ്. ഇവിടെ മലയാളമാണ് പ്രധാന ഭാഷ. "
-        "സംസ്ഥാനത്തിന്റെ തലസ്ഥാനം തിരുവനന്തപുരം ആണ്. കേരളം പ്രകൃതി സൗന്ദര്യത്തിന് പ്രശസ്തമാണ്.",
-        encoding="utf-8",
-    )
+    make_photo(OUT / "photo1.jpg", seed=1)
+    make_photo(OUT / "photo2.jpg", seed=2)
+    make_marksheet(OUT / "marksheet1.png", "Anu Joseph", [78, 85, 62, 70, 91, 66])
+    make_marksheet(OUT / "marksheet2.png", "Rahul K", [55, 60, 48, 52, 40, 58])
 
     doc = Document()
     doc.add_heading("Field report", level=1)

@@ -17,23 +17,25 @@ docker load -i "$BUNDLE/images.tar"
 echo "==> Installing files to $TARGET"
 mkdir -p "$TARGET"
 cp -r "$BUNDLE/source/." "$TARGET/"
-mkdir -p "$TARGET/models" "$TARGET/docker/certs" "$TARGET/clamav-db"
-cp -r "$BUNDLE/models/." "$TARGET/models/"
+mkdir -p "$TARGET/docker/certs" "$TARGET/clamav-db"
 cd "$TARGET"
 
 if [ ! -f .env ]; then
   echo "==> Creating .env with random secrets"
   rand() { python3 -c "import secrets; print(secrets.token_urlsafe($1))"; }
   ADMIN_PW="Admin-$(rand 9)"
+  API_KEY="$(rand 32)"
   sed -e "s|^SECRET_KEY=.*|SECRET_KEY=$(rand 48)|" \
       -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(rand 24)|" \
       -e "s|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=${ADMIN_PW}|" \
+      -e "s|^API_KEYS=.*|API_KEYS=${API_KEY}|" \
       .env.example > .env
   echo "ACI_VERSION=$(cat "$BUNDLE/VERSION")" >> .env
   chmod 600 .env
   echo
   echo "   First admin login:  user 'admin'  password '${ADMIN_PW}'"
   echo "   (you must change it at first login; it is also stored in $TARGET/.env)"
+  echo "   API key for the scheme platform: ${API_KEY}  (API_KEYS in $TARGET/.env)"
   echo
 else
   sed -i "s|^ACI_VERSION=.*|ACI_VERSION=$(cat "$BUNDLE/VERSION")|" .env

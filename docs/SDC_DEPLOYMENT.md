@@ -1,4 +1,4 @@
-# Installing the AI Content Indicator in the State Data Centre
+# Installing the Upload Integrity Check in the State Data Centre
 
 This guide is for the SDC IT team. Follow the steps in order. No internet
 connection is needed inside the SDC.
@@ -7,23 +7,18 @@ connection is needed inside the SDC.
 
 ## 1. What you need
 
-### Server (one virtual machine or physical server)
+### Server (one virtual machine)
 
-| | Minimum (CPU only) | Recommended | With GPU (optional) |
-|---|---|---|---|
-| CPU | 8 cores (x86-64, AVX2) | 16 cores | 8 cores |
-| RAM | 16 GB | 32 GB | 16 GB + GPU |
-| GPU | – | – | NVIDIA with 16 GB+ memory (e.g. T4, L4, A10) |
-| Disk | 60 GB free | 120 GB (SSD) | 60 GB |
-| OS | Linux x86-64 (RHEL 9, Ubuntu 22.04/24.04, Debian 12) | | + NVIDIA driver and NVIDIA Container Toolkit |
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | 2 cores (x86-64) | 4 cores |
+| RAM | 4 GB | 8 GB |
+| Disk | 20 GB free | 50 GB (database grows ~1 KB per uploaded file) |
+| GPU | not needed | not needed |
+| OS | Linux x86-64 (RHEL 9, Ubuntu 22.04/24.04, Debian 12) | |
 
-Why so much memory: the four AI models together use about **9 GB of RAM**.
-To use less (8 GB server), set `ENABLE_BINOCULARS=false` in `.env`. Text
-accuracy will drop (see LIMITATIONS.md).
-
-**Expected speed on CPU** (8 cores): an image takes about 1 second. A page of
-text (400 words) takes about 4 seconds. A 20-page report takes about 1 minute.
-A GPU is roughly 10× faster.
+The app itself uses about 200 MB of RAM. One check takes about 0.1–0.6 seconds.
+A 4-core server handles several thousand uploads per hour.
 
 ### Software on the server
 * Docker Engine 24 or newer, with the Docker Compose plugin (`docker compose version`)
@@ -43,13 +38,13 @@ This is usually done by the vendor or development team.
 
 ```bash
 git clone <repository> aci && cd aci
-./scripts/package_offline.sh            # add --gpu for a GPU server
+./scripts/package_offline.sh
 ```
 
 The script prints two files to copy:
 
 ```
-dist/aci-offline-<version>.tar          (about 15 GB)
+dist/aci-offline-<version>.tar          (about 1 GB)
 dist/aci-offline-<version>.tar.sha256
 ```
 
@@ -82,7 +77,8 @@ This will:
 1. check the checksums again
 2. load the Docker images
 3. copy the files to `/opt/aci`
-4. create `/opt/aci/.env` with random passwords and **print the first admin password**. Write it down.
+4. create `/opt/aci/.env` with random passwords, **print the first admin password**
+   and the **API key for the scheme platform**. Write them down.
 5. create a temporary self-signed certificate if none is present
 6. start the services
 
@@ -102,6 +98,12 @@ password. You must choose a new password immediately. Then go to **Users**
 and create accounts for officers. Each officer must change their temporary
 password at first login.
 
+### Connect the scheme platform
+
+Give the platform team the server address and the API key (`API_KEYS` in
+`/opt/aci/.env`) and point them to `docs/API.md`. Several keys can be listed,
+separated by commas: one per platform or environment. Remove a key to revoke it.
+
 ---
 
 ## 5. Settings (`/opt/aci/.env`)
@@ -110,14 +112,14 @@ Change a value, then run `sudo docker compose up -d` to apply it.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `THRESHOLD_AI` / `THRESHOLD_HUMAN` | 70 / 30 | score limits for "Likely AI" / "Likely Human" |
+| `API_KEYS` | random | keys the scheme platform uses (comma-separated) |
+| `API_RATE_LIMIT` | 600/minute | API calls per key per minute |
+| `SAME_PHOTO_MAX_DISTANCE` / `SIMILAR_PHOTO_MAX_DISTANCE` | 10 / 16 | how close two photos must be to count as "same" (high) or "very similar" (review); lower = stricter |
 | `MAX_UPLOAD_MB` | 25 | largest file accepted (also change `client_max_body_size` in `docker/nginx.conf`) |
 | `STORE_UPLOADS` | false | keep a copy of uploaded files? |
 | `RETENTION_HOURS` | 24 | stored uploads are deleted after this time |
 | `CLAMAV_REQUIRED` | false | if true, refuse uploads when the virus scanner is down |
-| `ENABLE_BINOCULARS` | true | the large text model; turn off on small servers |
-| `DEVICE` | auto | `auto`, `cpu` or `cuda` |
-| `RATE_LIMIT` | 20/minute | checks per user per minute |
+| `RATE_LIMIT` | 30/minute | manual checks per officer per minute |
 | `AUTH_PROVIDER` | local | `local` passwords, or `ldap` (needs development work, see `app/auth/providers.py`) |
 | `SECRET_KEY`, `POSTGRES_PASSWORD` | random | **never share; never change `POSTGRES_PASSWORD` after first start** |
 
@@ -141,19 +143,7 @@ The result screen shows "Virus scan: clean" when ClamAV is working.
 
 ---
 
-## 7. GPU servers
-
-1. Build the bundle with `--gpu` (step 2).
-2. Install the NVIDIA driver and NVIDIA Container Toolkit on the server
-   (offline installers from NVIDIA).
-3. Start with:
-   ```bash
-   sudo docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
-   ```
-
----
-
-## 8. Daily operation
+## 7. Daily operation
 
 | Task | Command (run in `/opt/aci`) |
 |---|---|
@@ -188,13 +178,13 @@ Also back up `/opt/aci/.env` and `/opt/aci/docker/certs/` in a safe place.
 
 ---
 
-## 9. Troubleshooting
+## 8. Troubleshooting
 
 | Problem | What to do |
 |---|---|
 | Page does not open | `docker compose ps`. Check the firewall allows 443. Check `docker compose logs nginx`. |
-| "Model files not found" warning on results | `/opt/aci/models` is missing files. Re-run `python3 scripts/verify_bundle.py --models-only /opt/aci/models`. |
-| App restarts / "Killed" in logs | Not enough RAM. Add RAM or set `ENABLE_BINOCULARS=false`. |
+| Platform gets 401 | Wrong API key. Compare with `API_KEYS` in `.env`; restart after changing it. |
+| Platform gets 429 | More calls than `API_RATE_LIMIT`. Raise it in `.env`. |
 | "Too many requests" | A user exceeded `RATE_LIMIT`. Wait one minute or raise the limit. |
 | Account locked | 5 wrong passwords lock the account for 15 minutes. An admin can **Enable** it on the Users page. |
 | "Virus scanner is unavailable" | ClamAV is not running or has no signatures (section 6). |
@@ -202,12 +192,15 @@ Also back up `/opt/aci/.env` and `/opt/aci/docker/certs/` in a safe place.
 
 ---
 
-## 10. Security notes for the SDC
+## 9. Security notes for the SDC
 
 * The app and database run on an internal Docker network with **no internet route**.
   Only Nginx (ports 80/443) is exposed.
 * Do not expose port 8000 or 5432 outside the server.
 * Uploaded files are **not stored** by default. The audit log keeps the file's
-  SHA-256 fingerprint, the scores and the user, but never the content.
+  SHA-256 fingerprint, the flags and the user, never the content. Photo
+  fingerprints (16-character hashes) are kept to find duplicates.
+* Keep the API key secret; it allows anyone to submit files and see which
+  applications share a photo.
 * Restrict SSH access to the server. `.env` contains secrets (it is created
   with permission 600).

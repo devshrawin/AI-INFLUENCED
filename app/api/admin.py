@@ -107,17 +107,21 @@ def update_user(
 
 
 # ------------------------------------------------------------------ audit log
-def _audit_query(q: str, event: str, label: str, date_from: str, date_to: str):
+def _audit_query(q: str, event: str, level: str, date_from: str, date_to: str):
     stmt = select(AuditLog)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
-            AuditLog.username.ilike(like) | AuditLog.file_name.ilike(like) | AuditLog.sha256.ilike(like)
+            AuditLog.username.ilike(like)
+            | AuditLog.file_name.ilike(like)
+            | AuditLog.sha256.ilike(like)
+            | AuditLog.application_id.ilike(like)
+            | AuditLog.applicant_id.ilike(like)
         )
     if event:
         stmt = stmt.where(AuditLog.event == event)
-    if label:
-        stmt = stmt.where(AuditLog.label == label)
+    if level:
+        stmt = stmt.where(AuditLog.flag_level == level)
     if date_from:
         stmt = stmt.where(AuditLog.created_at >= datetime.fromisoformat(date_from))
     if date_to:
@@ -130,7 +134,7 @@ def audit(
     request: Request,
     q: str = "",
     event: str = "",
-    label: str = "",
+    level: str = "",
     date_from: str = "",
     date_to: str = "",
     page: int = 1,
@@ -138,7 +142,7 @@ def audit(
     db: Session = Depends(get_db),
 ):
     try:
-        stmt = _audit_query(q, event, label, date_from, date_to)
+        stmt = _audit_query(q, event, level, date_from, date_to)
     except ValueError:
         raise HTTPException(400, "Dates must be YYYY-MM-DD") from None
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
@@ -146,7 +150,7 @@ def audit(
     rows = db.scalars(
         stmt.order_by(AuditLog.created_at.desc()).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     ).all()
-    filters = {"q": q, "event": event, "label": label, "date_from": date_from, "date_to": date_to}
+    filters = {"q": q, "event": event, "level": level, "date_from": date_from, "date_to": date_to}
     return render(
         request,
         "admin_audit.html",
@@ -162,9 +166,7 @@ def audit_detail(
     row = db.get(AuditLog, row_id)
     if row is None:
         raise HTTPException(404, "Not found")
-    pretty = json.dumps(
-        {"scores": row.scores, "models": row.model_versions, "warnings": row.warnings}, indent=2
-    )
+    pretty = json.dumps({"flags": row.flags, "warnings": row.warnings}, indent=2)
     return render(request, "admin_audit_detail.html", {"row": row, "pretty": pretty}, user=admin)
 
 
@@ -172,25 +174,27 @@ def audit_detail(
 def audit_csv(
     q: str = "",
     event: str = "",
-    label: str = "",
+    level: str = "",
     date_from: str = "",
     date_to: str = "",
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    stmt = _audit_query(q, event, label, date_from, date_to).order_by(AuditLog.created_at.desc())
-    cols = ["id", "created_at", "event", "username", "client_ip", "file_name", "sha256", "file_type",
-            "file_size", "final_score", "label", "av_status", "duration_s", "detail"]  # fmt: skip
+    stmt = _audit_query(q, event, level, date_from, date_to).order_by(AuditLog.created_at.desc())
+    cols = [
+        "id", "created_at", "event", "username", "application_id", "applicant_id", "client_ip",
+        "file_name", "sha256", "file_type", "file_size", "flag_level", "av_status", "duration_s", "detail",
+    ]  # fmt: skip
 
     def rows():
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([*cols, "model_versions"])
+        writer.writerow([*cols, "flag_codes"])
         for row in db.scalars(stmt).yield_per(500):
             values = [getattr(row, c) for c in cols]
             # Neutralise spreadsheet formulas in user-controlled text (CSV injection).
             values = ["'" + v if isinstance(v, str) and v[:1] in "=+-@" else v for v in values]
-            writer.writerow([*values, json.dumps(row.model_versions)])
+            writer.writerow([*values, " ".join(f.get("code", "") for f in row.flags or [])])
             yield buf.getvalue()
             buf.seek(0)
             buf.truncate()

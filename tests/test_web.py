@@ -4,9 +4,11 @@ from app.db.models import AuditLog
 from tests.conftest import PASSWORD, csrf_of, login
 
 
-def _check(client, sample, name, mime):
+def _check(client, sample, name, mime, app_id="APP-1", applicant="citizen-1"):
     token = csrf_of(client.get("/").text)
-    return client.post("/check", files={"file": (name, sample(name), mime)}, headers={"X-CSRF-Token": token})
+    data = {"application_id": app_id, "applicant_id": applicant}
+    return client.post("/check", data=data, files={"file": (name, sample(name), mime)},
+                       headers={"X-CSRF-Token": token})  # fmt: skip
 
 
 def test_pages_require_login(client):
@@ -15,24 +17,31 @@ def test_pages_require_login(client):
         assert r.status_code == 303 and r.headers["location"] == "/login"
 
 
-def test_login_and_check_image(client, make_user, sample, db):
+def test_login_and_check(client, make_user, sample, db):
     make_user()
     assert login(client).status_code == 303
-    r = _check(client, sample, "sample.png", "image/png")
-    assert r.status_code == 200 and "Likely AI" in r.text and "not proof" in r.text
-    row = db.query(AuditLog).filter_by(event="check").one()
-    assert row.username == "officer1" and row.sha256 and row.label == "Likely AI"
-    assert row.model_versions == {"fake/imgA": "test", "fake/imgB": "test"}
+    r = _check(client, sample, "photo1.jpg", "image/jpeg")
+    assert r.status_code == 200 and "No issues found" in r.text
+    r = _check(client, sample, "photo1.jpg", "image/jpeg", app_id="APP-2", applicant="citizen-2")
+    assert "Flagged" in r.text and "APP-1" in r.text and "not proof" in r.text
+    row = db.query(AuditLog).filter_by(event="check", application_id="APP-2").one()
+    assert row.username == "officer1" and row.sha256 and row.flag_level == "high"
+    assert row.flags[0]["code"] == "DUPLICATE_FILE"
     assert row.stored_path is None  # files are not kept by default
 
 
-def test_audit_never_contains_document_text(client, make_user, sample, db):
+def test_c2pa_flag_in_page(client, make_user, sample):
     make_user()
     login(client)
-    assert "Likely Human" in _check(client, sample, "human.txt", "text/plain").text
-    row = db.query(AuditLog).filter_by(event="check").one()
-    blob = str(row.scores) + str(row.warnings) + row.detail
-    assert "mackerel" not in blob and row.scores["chunks"][0]["score"] == 10
+    r = _check(client, sample, "c2pa_ai.jpg", "image/jpeg")
+    assert "Flagged" in r.text and "digitally signed content credential" in r.text
+
+
+def test_ids_required(client, make_user, sample):
+    make_user()
+    login(client)
+    r = _check(client, sample, "photo1.jpg", "image/jpeg", app_id=" ", applicant=" ")
+    assert r.status_code == 400 and "required" in r.text
 
 
 def test_rejected_file_is_logged(client, make_user, sample, db):
@@ -45,9 +54,10 @@ def test_rejected_file_is_logged(client, make_user, sample, db):
 def test_csrf_required(client, make_user, sample):
     make_user()
     login(client)
-    r = client.post("/check", files={"file": ("a.png", sample("sample.png"), "image/png")})
+    data = {"application_id": "A", "applicant_id": "B"}
+    r = client.post("/check", data=data, files={"file": ("a.png", sample("sample.png"), "image/png")})
     assert r.status_code == 403
-    r = client.post("/check", files={"file": ("a.png", sample("sample.png"), "image/png")},
+    r = client.post("/check", data=data, files={"file": ("a.png", sample("sample.png"), "image/png")},
                     headers={"X-CSRF-Token": "wrong"})  # fmt: skip
     assert r.status_code == 403
 
@@ -90,11 +100,12 @@ def test_admin_creates_user_and_views_audit(client, make_user, sample, db):
     assert r.status_code == 303
     _check(client, sample, "sample.png", "image/png")
     audit = client.get("/admin/audit?event=check")
-    assert audit.status_code == 200 and "sample.png" in audit.text
+    assert audit.status_code == 200 and "sample.png" in audit.text and "APP-1" in audit.text
     csv_text = client.get("/admin/audit.csv").text
     assert "sha256" in csv_text.splitlines()[0] and "user_created" in csv_text
     row_id = db.query(AuditLog).filter_by(event="check").one().id
-    assert "fake/imgA" in client.get(f"/admin/audit/{row_id}").text
+    assert "APP-1" in client.get(f"/admin/audit/{row_id}").text
+    assert client.get("/admin/audit?q=APP-1&level=none").status_code == 200
 
 
 def test_weak_password_rejected_on_create(client, make_user):
@@ -139,7 +150,7 @@ def test_rate_limit(client, make_user, sample):
     make_user()
     login(client)
     limiter.enabled = True
-    codes = [_check(client, sample, "sample.png", "image/png").status_code for _ in range(22)]
+    codes = [_check(client, sample, "sample.png", "image/png").status_code for _ in range(32)]
     assert 429 in codes and codes[0] == 200
 
 

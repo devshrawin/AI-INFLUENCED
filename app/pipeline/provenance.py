@@ -44,6 +44,14 @@ AI_GENERATOR_MARKERS = [
     "bing image creator", "copilot designer", "dreamstudio", "invokeai", "fooocus",
     "trainedalgorithmicmedia",
 ]  # fmt: skip
+# Lower-case substrings that show an image/PDF EDITING program saved the file.
+# Not proof of anything (people crop and brighten photos), but worth noting
+# on a document such as a marksheet that should come straight from the board.
+EDIT_SOFTWARE_MARKERS = [
+    "photoshop", "gimp", "canva", "picsart", "snapseed", "lightroom", "pixlr", "fotor", "photopea",
+    "affinity photo", "remini", "facetune", "ilovepdf", "smallpdf", "sejda", "pdfescape",
+    "pdf-xchange editor",
+]  # fmt: skip
 # PNG text keys written by popular local generators.
 AI_PNG_KEYS = {"parameters", "prompt", "workflow", "sd-metadata", "invokeai_metadata", "dream"}
 
@@ -133,6 +141,11 @@ def _scan_text_for_markers(label: str, text: str, result: ProvenanceResult) -> N
             hint = f"{label} mentions '{marker}'"
             if hint not in result.ai_hints:
                 result.ai_hints.append(hint)
+    for marker in EDIT_SOFTWARE_MARKERS:
+        if marker in low:
+            hint = f"{label} mentions '{marker}'"
+            if hint not in result.edit_hints:
+                result.edit_hints.append(hint)
 
 
 def read_image_metadata(data: bytes, result: ProvenanceResult) -> dict[str, str]:

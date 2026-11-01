@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     # --- General -----------------------------------------------------------
-    app_name: str = "AI Content Indicator"
+    app_name: str = "Upload Integrity Check"
     environment: str = "dev"  # dev | prod
     # Used to sign session cookies. MUST be set in .env for production.
     secret_key: str = Field(default="dev-only-change-me", min_length=8)
@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     # --- Storage -----------------------------------------------------------
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'app.db'}"
     upload_dir: Path = BASE_DIR / "data" / "uploads"
-    models_dir: Path = BASE_DIR / "models"
     # Keep a copy of uploaded files after the check? (Off by default.)
     store_uploads: bool = False
     # Uploads (if stored) are deleted after this many hours.
@@ -38,10 +37,7 @@ class Settings(BaseSettings):
 
     # --- Upload limits -----------------------------------------------------
     max_upload_mb: int = 25
-    max_text_chars: int = 200_000  # text beyond this is ignored (with a note)
     max_embedded_images: int = 10  # images pulled out of one document
-    # Images smaller than this (shortest side, pixels) are too small to judge.
-    min_image_side: int = 128
 
     # --- Antivirus (ClamAV) -----------------------------------------------
     clamav_enabled: bool = True  # used only if clamd is reachable
@@ -51,48 +47,21 @@ class Settings(BaseSettings):
     # --- Provenance ------------------------------------------------------
     # Optional PEM file of trusted C2PA root certificates (copy the official
     # C2PA trust list here). Without it, signatures are still verified but
-    # the signer is reported as "not on local trust list".
+    # the signer is reported as "not on the local trust list".
     c2pa_trust_anchors_file: Path | None = None
 
-    # --- Labels / thresholds (percent) ---------------------------------------
-    threshold_ai: float = 70.0  # score >= this -> "Likely AI"
-    threshold_human: float = 30.0  # score < this  -> "Likely Human"
-
-    # --- Detector weights ------------------------------------------------
-    weight_image_primary: float = 0.6
-    weight_image_secondary: float = 0.4
-    weight_text_binoculars: float = 0.5
-    weight_text_classifier: float = 0.5
-    # Documents: share of the final score for the text vs. embedded images.
-    weight_document_text: float = 0.7
-    weight_document_images: float = 0.3
-    # Max points a weak metadata hint (e.g. "Software: Midjourney") may add.
-    metadata_hint_bonus: float = 15.0
-
-    # --- Models -------------------------------------------------------------
-    # Folder names under models_dir (written by scripts/download_models.py).
-    image_model_primary: str = "haywoodsloan--ai-image-detector-deploy"
-    image_model_secondary: str = "Ateeqq--ai-vs-human-image-detector"
-    text_model_classifier: str = "desklib--ai-text-detector-v1.01"
-    binoculars_observer: str = "Qwen--Qwen2.5-1.5B"
-    binoculars_performer: str = "Qwen--Qwen2.5-1.5B-Instruct"
-    # Turn individual detectors on/off (e.g. Binoculars off on small servers).
-    enable_image_detectors: bool = True
-    enable_text_classifier: bool = True
-    enable_binoculars: bool = True
-    # Binoculars score at which P(AI)=50%, and curve spread. Calibrated for the
-    # Qwen2.5-1.5B pair on a public human/ChatGPT sample (about 5% false
-    # positives); re-run eval/calibrate_binoculars.py on local data.
-    binoculars_threshold: float = 0.90
-    binoculars_scale: float = 0.04
-    device: str = "auto"  # auto | cpu | cuda
-    preload_models: bool = False  # load all models at start-up (prod: true)
-    chunk_tokens: int = 384  # words per text chunk (approx.)
-    max_chunks: int = 20
-    min_words_for_text_score: int = 40
+    # --- Duplicate photos --------------------------------------------------
+    # Fingerprint distance (0-64 bits). Measured on 53 real photos (Nov 2026):
+    # WhatsApp-style copies 0-2; copies cropped 2-5% mostly 4-10;
+    # unrelated photos never below 20 (median 30).
+    same_photo_max_distance: int = 10  # <= this: "same photo" (high)
+    similar_photo_max_distance: int = 16  # <= this: "very similar photo" (review)
 
     # --- Security -----------------------------------------------------------
-    rate_limit: str = "20/minute"  # per user/IP for the upload endpoint
+    rate_limit: str = "30/minute"  # per officer for manual checks in the web page
+    # API keys for the scheme platform (comma-separated). Empty = API disabled.
+    api_keys: str = ""
+    api_rate_limit: str = "600/minute"  # per API key
     session_max_age_hours: int = 8
     cookie_secure: bool = False  # set True when served over HTTPS
     auth_provider: str = "local"  # local | ldap (see app/auth/providers.py)
@@ -108,3 +77,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def api_key_list(settings: Settings) -> list[str]:
+    return [k.strip() for k in settings.api_keys.split(",") if len(k.strip()) >= 16]

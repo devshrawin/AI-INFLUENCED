@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db.models import AuditLog, User
-from app.pipeline.orchestrator import AnalysisResult
+from app.pipeline.check import CheckResult
 from app.pipeline.validate import ValidatedFile
 
-EXTENSIONS = {"pdf": "pdf", "docx": "docx", "txt": "txt", "jpeg": "jpg", "png": "png", "webp": "webp"}
+EXTENSIONS = {"pdf": "pdf", "docx": "docx", "jpeg": "jpg", "png": "png", "webp": "webp"}
 
 
 def store_upload(vf: ValidatedFile, settings: Settings) -> str:
@@ -26,59 +26,30 @@ def store_upload(vf: ValidatedFile, settings: Settings) -> str:
     return str(path)
 
 
-def audit_scores(result: AnalysisResult) -> dict:
-    """Scores and signal summary only - never document text or excerpts."""
-    return {
-        "signals": [
-            {
-                "name": s.name,
-                "source": s.source,
-                "target": s.target,
-                "score": s.score,
-                "weight": s.weight,
-                "model_id": s.model_id,
-            }
-            for s in result.signals
-        ],
-        "chunks": [{"index": c.index, "score": c.score, "words": c.words} for c in result.chunks],
-        "explanation": result.explanation,
-        "language": (result.language or {}).get("name"),
-        "provenance": {
-            k: (result.provenance or {}).get(k)
-            for k in (
-                "c2pa_present",
-                "c2pa_state",
-                "c2pa_trusted",
-                "ai_declared_type",
-                "generator",
-                "confirmed_ai",
-            )
-        },
-    }
-
-
 def record_check(
     db: Session,
-    user: User,
+    username: str,
+    user: User | None,
     client_ip: str,
     vf: ValidatedFile,
-    result: AnalysisResult,
+    result: CheckResult,
     settings: Settings,
 ) -> AuditLog:
+    """`username` is the officer, or "api:<key name>" for platform calls."""
     stored = store_upload(vf, settings) if settings.store_uploads else None
     row = AuditLog(
         event="check",
-        user_id=user.id,
-        username=user.username,
+        user_id=user.id if user else None,
+        username=username,
+        application_id=result.application_id,
+        applicant_id=result.applicant_id,
         client_ip=client_ip,
         file_name=vf.filename,
         sha256=vf.sha256,
         file_type=vf.kind,
         file_size=vf.size,
-        final_score=result.final_score,
-        label=result.label,
-        scores=audit_scores(result),
-        model_versions=result.model_versions(),
+        flag_level=result.level,
+        flags=[f.to_dict() for f in result.flags],
         warnings=result.warnings,
         av_status=vf.av_status,
         duration_s=result.duration_s,

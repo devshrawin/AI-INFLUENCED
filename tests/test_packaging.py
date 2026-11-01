@@ -46,7 +46,8 @@ def test_missing_file_fails(tmp_path):
     assert vb.main([str(tmp_path)]) == 1
 
 
-def test_real_models_manifest_if_present():
-    models = ROOT / "models"
-    if (models / "MANIFEST.json").exists():
-        assert vb.check_models(models) == []
+def test_bundle_without_models_folder(tmp_path):
+    (tmp_path / "images.tar").write_bytes(b"images")
+    digest = hashlib.sha256(b"images").hexdigest()
+    (tmp_path / "SHA256SUMS").write_text(f"{digest}  ./images.tar\n")
+    assert vb.main([str(tmp_path)]) == 0

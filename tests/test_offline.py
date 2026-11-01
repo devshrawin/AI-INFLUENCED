@@ -17,15 +17,6 @@ def test_outbound_network_is_blocked_in_tests():
         socket.create_connection(("example.com", 443), timeout=1)
 
 
-def test_offline_env_flags_set():
-    import os
-
-    import app.offline  # noqa: F401
-
-    assert os.environ["HF_HUB_OFFLINE"] == "1"
-    assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
-
-
 def test_no_external_urls_in_frontend():
     """Templates and static assets must not load anything from the internet."""
     pattern = re.compile(r"""(src|href)\s*=\s*["']?(https?:)?//""", re.I)

@@ -1,120 +1,100 @@
-# AI Content Indicator (offline)
+# Upload Integrity Check (offline)
 
-A web tool for government officers. Upload a **document** (PDF, DOCX, TXT) or an
-**image** (JPG, PNG, WEBP) and get a **score from 0 to 100** for how likely the
-content is AI-generated, a label, and a short reason.
+A small service for government scheme platforms. When a citizen uploads a
+file (a flood-damage photo, a marksheet, a certificate), it flags two things
+for the officer:
 
-| Score | Label |
+1. **AI influence in the file's metadata.** The file says it was made or
+   edited with AI, either through a digitally signed content credential
+   (C2PA, added by ChatGPT, Gemini, Adobe Firefly and others) or through
+   tool names in its metadata (EXIF / XMP / PNG / PDF).
+2. **The same image was already uploaded by another applicant.** For example,
+   one flood photo submitted in 13 different applications, even if resized,
+   re-compressed or forwarded on WhatsApp.
+
+Each file gets a level and a short note:
+
+| Level | Meaning |
 |---|---|
-| ≥ 70 | **Likely AI** |
-| 30 – 70 | **Not sure** |
-| < 30 | **Likely Human** |
-| signed AI credential | **AI (provenance-confirmed)** |
-| nothing reliable to measure | **Cannot assess** |
+| **high** | Strong evidence: signed AI credential, or same file or photo as another applicant |
+| **review** | Worth a look: AI tool named in unsigned metadata, very similar photo, broken credential |
+| **none** | No issues found |
 
-The thresholds are configurable in `.env`.
+> **This is an indicator for human review, not proof.** Missing metadata
+> does not prove a file is genuine. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
-> **This is an indicator for human review, not proof.**
-> Please read [docs/LIMITATIONS.md](docs/LIMITATIONS.md) before using results in any decision.
+## How the scheme platform uses it
 
-## Fully offline
+The platform calls `POST /api/v1/check` for every upload, sending
+`application_id`, `applicant_id` and the file, and stores the returned
+`level` and `note` with the application. See **[docs/API.md](docs/API.md)**.
 
-The tool is built to run inside a State Data Centre with **no internet access**:
+Officers can also check files by hand in the web page (login required).
+Admins see a searchable audit log of every check.
 
-* All models run locally. They are downloaded once on an internet machine,
-  checksummed, and copied in. At runtime `HF_HUB_OFFLINE=1` and
-  `TRANSFORMERS_OFFLINE=1` are forced (see `app/offline.py`).
-* No CDN, fonts, analytics or telemetry. CSS/JS are served from `app/static/`.
-* The C2PA reader runs with remote manifest fetching and OCSP lookups disabled.
-* In Docker the app sits on an `internal` network with no route out.
-* The test suite blocks every network socket (`pytest-socket`). Any code
-  that tries to connect out makes the tests fail.
+## How it works
 
-## How a file is checked
-
-```
-upload ─► validate (size, real type from magic bytes, ClamAV)
-        ├─ image ───► provenance (C2PA + EXIF/XMP/PNG text) ─► 2 image models ─────────────┐
-        └─ document ► extract text + embedded images + metadata                             │
-                      ├─ embedded images ─► provenance ─► 2 image models                    ├─► combine ─► result
-                      └─ text ─► language check ─► chunks ─► Binoculars + DeBERTa classifier ┘
-```
-
-| Step | What it does | Code |
+| Check | How | Code |
 |---|---|---|
-| Validate | size limit, file type from content (not extension), ClamAV if running | `app/pipeline/validate.py` |
-| Provenance | signed C2PA credential declaring AI ⇒ "AI (provenance-confirmed)"; EXIF/XMP/PNG hints add a small bonus | `app/pipeline/provenance.py` |
-| Image models | `haywoodsloan/ai-image-detector-deploy` (SwinV2, Apache-2.0) + `Ateeqq/ai-vs-human-image-detector` (SigLIP, Apache-2.0) | `app/pipeline/detectors/image.py` |
-| Text models | **Binoculars** zero-shot (Qwen2.5-1.5B + Instruct, Apache-2.0) + `desklib/ai-text-detector-v1.01` (DeBERTa-v3, MIT) | `app/pipeline/detectors/text.py` |
-| Language | non-English text (Malayalam, Hindi…) gets a warning and is **not** used for the label | `app/pipeline/language.py` |
-| Long text | split into ~384-word sections; the most AI-like sections are shown | `app/pipeline/chunking.py` |
-| Combine | simple weighted average, every weight shown on screen | `app/pipeline/combine.py` |
+| File safety | size limit, real type from content (not extension), ClamAV if available, zip/image bomb limits | `app/pipeline/validate.py` |
+| AI credential | C2PA reader (offline; remote fetching disabled); signature must be intact | `app/pipeline/provenance.py` |
+| AI / editing metadata | EXIF Software, XMP (incl. IPTC "trainedAlgorithmicMedia"), PNG text chunks from Stable Diffusion tools, PDF/DOCX producer | `app/pipeline/provenance.py` |
+| Same file | SHA-256 of the file compared with all earlier uploads | `app/pipeline/duplicates.py` |
+| Same photo | 64-bit perceptual fingerprint; survives resizing, compression and light cropping | `app/pipeline/fingerprint.py` |
+| Flags and note | levels, plain-language messages | `app/pipeline/flags.py`, `app/pipeline/check.py` |
 
-## Run locally (development)
+**Photos and documents are treated differently.** Two different students'
+marksheets with the same printed layout look alike to a visual fingerprint,
+so documents are only matched as **exact** files. Photos are matched
+visually. The platform tells the service which kind each upload is
+(`doc_type`), or the service guesses.
 
-Needs Python 3.11, `libmagic` (`apt install libmagic1`), about 12 GB of free disk
-and 16 GB of RAM (8 GB is enough with `ENABLE_BINOCULARS=false`).
+Uploads by the **same applicant** never flag each other (re-submitting is normal).
+
+## Run locally
+
+Needs Python 3.11 and `libmagic` (`apt install libmagic1`). Any office PC is
+enough (about 200 MB RAM).
 
 ```bash
 python3.11 -m venv .venv && . .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements-dev.txt -c requirements.lock
-
-python scripts/download_models.py            # ~8.5 GB, once (internet needed)
-
 export BOOTSTRAP_ADMIN_PASSWORD='Choose-a-pass-1'
-uvicorn app.main:app --reload                # http://localhost:8000  (user: admin)
+export API_KEYS='a-long-random-key-for-testing-123'
+uvicorn app.main:app --reload       # http://localhost:8000  (user: admin)
 ```
 
-The SQLite dev database is created at `data/app.db`.
-
-Tests (no models or internet needed; tests marked `models` use real weights if present):
+Tests (network blocked during tests):
 
 ```bash
-pytest            # all tests, network blocked
-pytest -m models  # only the real-model tests
+pytest
 ruff check . && ruff format --check .
 ```
 
 ## Production (State Data Centre)
 
-See **[docs/SDC_DEPLOYMENT.md](docs/SDC_DEPLOYMENT.md)**. In short:
-
-1. On an internet machine: `./scripts/package_offline.sh` produces one `.tar`.
-2. Copy it into the SDC. Run `scripts/verify_bundle.py`, then `scripts/install_sdc.sh`.
-3. The stack runs Nginx (HTTPS), the app, PostgreSQL and optionally ClamAV, under Docker Compose.
+See **[docs/SDC_DEPLOYMENT.md](docs/SDC_DEPLOYMENT.md)**:
+`./scripts/package_offline.sh` → copy one `.tar` → `verify_bundle.py` →
+`install_sdc.sh`. The stack is Docker Compose with Nginx (HTTPS), the app,
+PostgreSQL and optional ClamAV. There is no internet access at runtime.
 
 ## Security and governance
+* Officer/admin login (Argon2id, lockout, forced password change); pluggable LDAP.
+* API keys for the platform; keys are never written to logs.
+* Audit log of every check: who or which API key, application, applicant,
+  SHA-256, flags. **File contents are not stored**; only hashes are kept for
+  duplicate matching.
+* CSRF protection, strict cookies, Content-Security-Policy, rate limits, secrets in `.env`.
 
-* Login with roles **admin** and **officer**; Argon2id password hashes; lockout
-  after 5 failed attempts; forced change of temporary passwords.
-* Pluggable login (`AUTH_PROVIDER=local|ldap`; LDAP/SSO hook in `app/auth/providers.py`).
-* **Audit log** of every check: user, time, IP, SHA-256, file type, every score,
-  model versions and final label. Document text is **never** stored. Admins can
-  search, filter and export it to CSV.
-* Uploaded files are not kept (`STORE_UPLOADS=false`). If enabled, they are
-  deleted after `RETENTION_HOURS` (default 24).
-* CSRF tokens, strict same-site cookies, Content-Security-Policy, rate limiting
-  (app and Nginx), and all secrets in `.env`.
+## Earlier version with AI detector models
 
-## Measuring accuracy on your own data
+The first version also ran local AI models (image and text detectors,
+Binoculars, language check). It was set aside to keep deployment simple.
+It is preserved on the branch **`archive/full-ml-detector`**:
 
 ```bash
-python eval/evaluate.py /path/to/testset     # testset/real/*, testset/ai/*
-python eval/calibrate_binoculars.py /path/to/text_testset
+git checkout archive/full-ml-detector    # look at it or run it
 ```
 
-The first writes `eval/reports/report.md` with accuracy, precision, recall,
-false-positive rate and confusion matrices, reported separately for images
-and text.
-
-## Repository layout
-
-```
-app/            FastAPI application (pipeline/, detectors/, auth/, db/, api/, templates/, static/)
-scripts/        download_models.py, package_offline.sh, verify_bundle.py, install_sdc.sh
-eval/           evaluate.py, calibrate_binoculars.py
-tests/          unit + web tests, samples/ (small smoke-test files)
-docker/         Dockerfile, nginx.conf
-docs/           SDC_DEPLOYMENT.md, LIMITATIONS.md
-```
+Ask to bring it back, or to merge selected parts (e.g. the AI-image model)
+into this version.

@@ -7,13 +7,14 @@
     <tr><th>User / IP</th><td>{{ row.username }} / {{ row.client_ip }}</td></tr>
     <tr><th>File</th><td>{{ row.file_name }} ({{ row.file_type }}, {{ row.file_size }} bytes)</td></tr>
     <tr><th>SHA-256</th><td><code>{{ row.sha256 }}</code></td></tr>
-    <tr><th>Result</th><td>{% if row.final_score is not none %}{{ "%.1f"|format(row.final_score) }}% – {% endif %}{{ row.label }}</td></tr>
+    <tr><th>Application / applicant</th><td>{{ row.application_id }} / {{ row.applicant_id }}</td></tr>
+    <tr><th>Result</th><td>{{ row.flag_level }}</td></tr>
     <tr><th>Virus scan</th><td>{{ row.av_status }}</td></tr>
     <tr><th>Stored file</th><td>{{ row.stored_path or "not stored / deleted by retention" }}</td></tr>
     <tr><th>Processing time</th><td>{{ row.duration_s }} s</td></tr>
   </tbody>
 </table>
-<h4>Signals, model versions and warnings</h4>
+<h4>Flags and warnings</h4>
 <pre>{{ pretty }}</pre>
 <a href="/admin/audit">← Back to audit log</a>
 {% endblock %}

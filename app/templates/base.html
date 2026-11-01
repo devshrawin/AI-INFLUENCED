@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}AI Content Indicator{% endblock %}</title>
+  <title>{% block title %}Upload Integrity Check{% endblock %}</title>
   <link rel="stylesheet" href="/static/pico.min.css">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
@@ -12,7 +12,7 @@
 <body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
   <header class="container">
     <nav>
-      <ul><li><a href="/" class="brand"><strong>AI Content Indicator</strong></a></li></ul>
+      <ul><li><a href="/" class="brand"><strong>Upload Integrity Check</strong></a></li></ul>
       {% if user %}
       <ul>
         <li><a href="/">Check</a></li>

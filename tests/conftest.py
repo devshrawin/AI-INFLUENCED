@@ -15,6 +15,7 @@ os.environ.setdefault("UPLOAD_DIR", str(Path(__file__).parent / ".tmp_uploads"))
 
 SAMPLES = Path(__file__).parent / "samples"
 PASSWORD = "Test-pass-123"
+API_KEY = "test-api-key-0123456789"
 
 
 @pytest.fixture
@@ -54,16 +55,14 @@ def make_user(db):
 
 @pytest.fixture
 def client(db, monkeypatch):
-    """Test client with fake detectors and rate limiting off."""
+    """Test client with rate limiting off and one API key configured."""
     from fastapi.testclient import TestClient
 
     from app.api.limiter import limiter
+    from app.config import get_settings
     from app.main import create_app
-    from app.pipeline.detectors import registry
-    from tests.fakes import fake_image, fake_text
 
-    monkeypatch.setattr(registry, "image_detectors", lambda: fake_image(90, 90))
-    monkeypatch.setattr(registry, "text_detectors", lambda: fake_text(10, 10))
+    monkeypatch.setattr(get_settings(), "api_keys", API_KEY)
     limiter.enabled = False
     limiter.reset()
     with TestClient(create_app(start_background=False)) as c:

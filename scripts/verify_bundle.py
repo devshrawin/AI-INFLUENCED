@@ -7,7 +7,8 @@ Usage:
 
 Checks:
   1. every file listed in SHA256SUMS exists and matches
-  2. every model file listed in models/MANIFEST.json exists and matches
+  2. if the bundle has a models/ folder (older versions), every file in
+     models/MANIFEST.json exists and matches
 Exit code 0 = all good, 1 = problem found. Uses only the Python standard library.
 """
 
@@ -71,8 +72,9 @@ def main(argv: list[str]) -> int:
         root = Path(argv[0])
         print("Checking bundle checksums (SHA256SUMS)...")
         problems = check_sums(root)
-        print("Checking model checksums (models/MANIFEST.json)...")
-        problems += check_models(root / "models")
+        if (root / "models").is_dir():
+            print("Checking model checksums (models/MANIFEST.json)...")
+            problems += check_models(root / "models")
     if problems:
         print("\nVERIFICATION FAILED:")
         for p in problems:

@@ -6,6 +6,9 @@ from starlette.requests import Request
 
 
 def _key(request: Request) -> str:
+    api_key = request.headers.get("X-API-Key")
+    if api_key and request.url.path.startswith("/api/"):
+        return "api:" + api_key[-8:]
     uid = request.session.get("uid") if "session" in request.scope else None
     return f"user:{uid}" if uid else f"ip:{get_remote_address(request)}"
 

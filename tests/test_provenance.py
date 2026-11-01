@@ -65,3 +65,24 @@ def test_document_metadata_hint():
     res = ProvenanceResult()
     check_document_metadata({"Producer": "ChatGPT export"}, res)
     assert res.ai_hints
+
+
+def test_editing_software_hint():
+    img = Image.new("RGB", (64, 64))
+    exif = img.getexif()
+    exif[0x0131] = "Adobe Photoshop 25.1 (Windows)"
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", exif=exif)
+    res, _ = check_provenance(buf.getvalue(), "image/jpeg")
+    assert any("photoshop" in h for h in res.edit_hints) and not res.ai_hints
+
+
+def test_xmp_iptc_ai_source_type_hint():
+    """Google/Meta tools write IPTC DigitalSourceType=trainedAlgorithmicMedia into XMP (unsigned)."""
+    xmp = (b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+           b'<rdf:Description Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/'
+           b'compositeWithTrainedAlgorithmicMedia"/></rdf:RDF></x:xmpmeta>')  # fmt: skip
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64)).save(buf, "JPEG", xmp=xmp)
+    res, _ = check_provenance(buf.getvalue(), "image/jpeg")
+    assert any("trainedalgorithmicmedia" in h for h in res.ai_hints)
