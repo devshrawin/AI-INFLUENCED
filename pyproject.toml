@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Block ALL network sockets during tests (offline guarantee).
+# Unix sockets stay allowed (ClamAV uses one); tests that need the
+# in-process HTTP client do not open real sockets.
+addopts = "--disable-socket --allow-unix-socket -q"
+markers = ["models: needs real model weights in ./models (skipped if missing)"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]  # FastAPI's File(...)/Depends(...) defaults are idiomatic

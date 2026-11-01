@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}AI Content Indicator{% endblock %}</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul><li><strong>AI Content Indicator</strong></li></ul>
+      <ul>{% block nav %}{% endblock %}</ul>
+    </nav>
+  </header>
+  <main class="container">{% block content %}{% endblock %}</main>
+  <footer class="container"><small>Runs fully offline. This is an indicator for human review, not proof.</small></footer>
+</body>
+</html>

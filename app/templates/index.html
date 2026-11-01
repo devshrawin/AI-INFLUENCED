@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+  <h2>Check a file</h2>
+  <p>Upload a document (PDF, DOCX, TXT) or an image (JPG, PNG, WEBP), max {{ settings.max_upload_mb }} MB.</p>
+  <form hx-post="/check" hx-target="#result" hx-encoding="multipart/form-data"
+        hx-indicator="#busy" hx-disabled-elt="button">
+    <input type="file" name="file" required accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp">
+    <button type="submit">Check</button>
+    <progress id="busy" class="htmx-indicator"></progress>
+  </form>
+</article>
+<div id="result"></div>
+{% endblock %}
