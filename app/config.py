@@ -5,6 +5,7 @@ name (upper case) or a line in the `.env` file. Secrets must NEVER be
 hard-coded here: only safe development defaults live in this file.
 """
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -15,7 +16,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # ACI_ENV_FILE="" disables reading a .env file (used by the test suite).
+    model_config = SettingsConfigDict(
+        env_file=os.environ.get("ACI_ENV_FILE", ".env") or None, env_file_encoding="utf-8", extra="ignore"
+    )
 
     # --- General -----------------------------------------------------------
     app_name: str = "AI Content Indicator"
@@ -36,6 +40,8 @@ class Settings(BaseSettings):
     max_upload_mb: int = 25
     max_text_chars: int = 200_000  # text beyond this is ignored (with a note)
     max_embedded_images: int = 10  # images pulled out of one document
+    # Images smaller than this (shortest side, pixels) are too small to judge.
+    min_image_side: int = 128
 
     # --- Antivirus (ClamAV) -----------------------------------------------
     clamav_enabled: bool = True  # used only if clamd is reachable

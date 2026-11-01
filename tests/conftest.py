@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 # Isolated settings for tests (set before the app is imported).
+os.environ["ACI_ENV_FILE"] = ""  # never read a developer's .env
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["CLAMAV_ENABLED"] = "false"
 os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = ""

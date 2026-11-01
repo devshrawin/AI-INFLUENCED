@@ -92,3 +92,17 @@ def test_disagreement_warning(sample):
     assert any("strongly disagree" in w for w in r.warnings)
     r = analyze(_vf(sample, "sample.png"), S, image_dets=fake_image(60, 50), text_dets=[])
     assert not any("strongly disagree" in w for w in r.warnings)
+
+
+def test_tiny_image_not_scored():
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), (10, 200, 30)).save(buf, "PNG")
+    vf = validate_upload(buf.getvalue(), "tiny.png", S)
+    dets = fake_image(99, 99)
+    r = analyze(vf, S, image_dets=dets, text_dets=[])
+    assert r.label == LABEL_UNKNOWN and any("32x32" in w for w in r.warnings)
+    assert dets[0][0].calls == 0

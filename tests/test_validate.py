@@ -103,3 +103,25 @@ def test_clamav_protocol_against_fake_daemon(tmp_path):
     assert clamav.scan_bytes(b"xx EICAR xx", path) == ("FOUND", "Eicar-Sig")
     t.join()
     srv.close()
+
+
+def test_rejects_docx_zip_bomb(sample, settings, monkeypatch):
+    from app.pipeline import validate
+
+    monkeypatch.setattr(validate, "MAX_DOCX_UNCOMPRESSED", 1000)
+    with pytest.raises(ValidationError, match="unsafe size"):
+        validate_upload(sample("sample.docx"), "a.docx", Settings(clamav_enabled=False))
+
+
+def test_rejects_huge_image(sample, monkeypatch):
+    from app.pipeline import validate
+
+    monkeypatch.setattr(validate, "MAX_IMAGE_PIXELS", 100)
+    with pytest.raises(ValidationError, match="too large"):
+        validate_upload(sample("sample.png"), "a.png", Settings(clamav_enabled=False))
+
+
+def test_rejects_truncated_image(sample, settings):
+    data = sample("sample.png")[:60]
+    with pytest.raises(ValidationError, match="damaged"):
+        validate_upload(data, "a.png", settings)

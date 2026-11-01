@@ -56,14 +56,40 @@ class ValidatedFile:
         return self.kind in IMAGE_KINDS
 
 
+# Protection against "zip bombs" (tiny DOCX files that expand to gigabytes)
+# and "decompression bomb" images (huge pixel counts that exhaust memory).
+MAX_DOCX_UNCOMPRESSED = 300 * 1024 * 1024
+MAX_IMAGE_PIXELS = 60_000_000  # 60 megapixels
+
+
 def _looks_like_docx(data: bytes) -> bool:
     """libmagic sometimes reports DOCX as a plain zip; confirm by contents."""
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            names = set(zf.namelist())
+            infos = zf.infolist()
     except zipfile.BadZipFile:
         return False
-    return "[Content_Types].xml" in names and "word/document.xml" in names
+    names = {i.filename for i in infos}
+    if not ("[Content_Types].xml" in names and "word/document.xml" in names):
+        return False
+    if sum(i.file_size for i in infos) > MAX_DOCX_UNCOMPRESSED:
+        raise ValidationError("The Word document expands to an unsafe size and was rejected.")
+    return True
+
+
+def _check_image(data: bytes) -> None:
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            width, height = im.size
+            if width * height > MAX_IMAGE_PIXELS:
+                raise ValidationError(f"The image is too large ({width}x{height} pixels).")
+            im.verify()  # structural check without decoding all pixels
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise ValidationError("The image file is damaged and cannot be read.") from exc
 
 
 def _is_text(data: bytes) -> bool:
@@ -117,6 +143,8 @@ def validate_upload(data: bytes, filename: str, settings: Settings) -> Validated
     if len(data) > settings.max_upload_bytes:
         raise ValidationError(f"The file is larger than the {settings.max_upload_mb} MB limit.")
     kind, mime = detect_kind(data)
+    if kind in IMAGE_KINDS:
+        _check_image(data)
     av_status = scan_with_clamav(data, settings)
     return ValidatedFile(
         data=data,

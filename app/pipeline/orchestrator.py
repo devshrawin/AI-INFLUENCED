@@ -8,6 +8,7 @@ document -> extract -> provenance (file + each embedded image)
 
 from __future__ import annotations
 
+import io
 import logging
 import threading
 import time
@@ -89,9 +90,28 @@ def _run(det, payload, target: str, source: str, warnings: list[str]) -> Signal:
     return Signal(det.name, source, None, 0.0, det.model_id, None, msg, target)
 
 
+def _image_too_small(data: bytes, min_side: int) -> tuple[int, int] | None:
+    """Return (width, height) if the image is below the minimum size, else None."""
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            size = im.size
+    except Exception:
+        return None  # unreadable: let the detectors report the error
+    return size if min(size) < min_side else None
+
+
 def _score_image(
-    data: bytes, target: str, detectors, warnings: list[str]
+    data: bytes, target: str, detectors, warnings: list[str], min_side: int = 0
 ) -> tuple[float | None, list[Signal]]:
+    small = _image_too_small(data, min_side) if detectors and min_side else None
+    if small:
+        warnings.append(
+            f"The {target} is only {small[0]}x{small[1]} pixels; at least {min_side} px are needed "
+            "for a reliable image score, so it was not scored."
+        )
+        return None, []
     signals, pairs = [], []
     for det, weight in detectors:
         sig = _run(det, data, target, "image_model", warnings)
@@ -174,7 +194,7 @@ def analyze(
         signals += _provenance_signals(prov, "file")
 
         if vf.is_image:
-            score, sigs = _score_image(vf.data, "image", image_dets, warnings)
+            score, sigs = _score_image(vf.data, "image", image_dets, warnings, settings.min_image_side)
             signals += sigs
             if score is not None:
                 parts.append(cmb.Part("Image", score, 1.0))
@@ -199,7 +219,7 @@ def analyze(
                 ai_hints += iprov.ai_hints
                 if iprov.confirmed_ai and not confirmed:
                     confirmed, confirmed_where = True, target
-                score, sigs = _score_image(blob, target, image_dets, warnings)
+                score, sigs = _score_image(blob, target, image_dets, warnings, settings.min_image_side)
                 signals += sigs
                 if score is not None:
                     img_scores.append(score)
