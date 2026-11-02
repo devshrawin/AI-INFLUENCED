@@ -13,3 +13,4 @@ eval/reports/
 tests/.tmp_uploads/
 docker/certs/
 clamav-db/
+eval/work/
