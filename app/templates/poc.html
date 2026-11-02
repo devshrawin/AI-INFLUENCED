@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<nav class="tabs" role="tablist">
+  <button class="tab active" role="tab" data-tab="ai" aria-selected="true">AI photo check</button>
+  <button class="tab" role="tab" data-tab="dup" aria-selected="false">Duplicate pictures</button>
+</nav>
+
+<section id="panel-ai" class="panel">
+  <div class="intro">
+    <h2>Was this file made or edited with AI?</h2>
+    <p>Reads the file's hidden information: signed content credentials (ChatGPT, Gemini, Firefly&hellip;)
+       and AI tool names in EXIF, XMP, PNG and PDF data. Nothing is stored.</p>
+  </div>
+  <form hx-post="/poc/ai" hx-target="#out-ai" hx-encoding="multipart/form-data" hx-indicator="#busy-ai" hx-disabled-elt="find button">
+    <label class="drop">
+      <input type="file" name="file" required accept=".pdf,.docx,.jpg,.jpeg,.png,.webp">
+      <span class="drop-icon">&#8679;</span>
+      <span class="drop-text"><strong>Choose a file</strong> or drop it here</span>
+      <span class="drop-hint">JPG, PNG, WEBP, PDF, DOCX &middot; up to {{ settings.max_upload_mb }} MB</span>
+      <span class="drop-names"></span>
+    </label>
+    <div class="actions"><button type="submit">Check for AI</button><span id="busy-ai" class="spinner htmx-indicator"></span></div>
+  </form>
+  <div id="out-ai"></div>
+</section>
+
+<section id="panel-dup" class="panel" hidden>
+  <div class="intro">
+    <h2>Has this picture been uploaded before?</h2>
+    <p>Upload one or many pictures. Each is compared with everything uploaded here earlier, even if resized,
+       compressed, cropped or forwarded on WhatsApp, and then remembered for the next upload.</p>
+  </div>
+  <form hx-post="/poc/duplicates" hx-target="#out-dup" hx-encoding="multipart/form-data" hx-indicator="#busy-dup" hx-disabled-elt="find button">
+    <label class="drop">
+      <input type="file" name="files" multiple required accept=".pdf,.docx,.jpg,.jpeg,.png,.webp">
+      <span class="drop-icon">&#8679;</span>
+      <span class="drop-text"><strong>Choose pictures</strong> or drop them here</span>
+      <span class="drop-hint">Select several at once &middot; JPG, PNG, WEBP (PDF and DOCX match exact copies only)</span>
+      <span class="drop-names"></span>
+    </label>
+    <div class="actions"><button type="submit">Find duplicates</button><span id="busy-dup" class="spinner htmx-indicator"></span></div>
+  </form>
+  <div id="pool" class="pool">{% include "_poc_pool.html" %}</div>
+  <div id="out-dup"></div>
+</section>
+{% endblock %}

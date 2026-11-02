@@ -1,0 +1,32 @@
+{% set dups = items|selectattr("r", "defined")|selectattr("r.level", "equalto", "high")|list|length %}
+{% set sims = items|selectattr("r", "defined")|selectattr("r.level", "equalto", "review")|list|length %}
+<div class="summary">
+  {{ items|length }} file{{ "" if items|length == 1 else "s" }} checked &middot;
+  <strong class="t-high">{{ dups }}</strong> duplicate{{ "" if dups == 1 else "s" }} &middot;
+  <strong class="t-review">{{ sims }}</strong> similar
+</div>
+<div class="grid">
+{% for it in items %}
+  {% if it.error %}
+  <div class="tile err"><div class="tile-body"><span class="pill high">Rejected</span><div class="fname">{{ it.name }}</div><p class="muted">{{ it.error }}</p></div></div>
+  {% else %}
+  {% set r = it.r %}
+  {% set verdict = {"high": "Duplicate", "review": "Similar", "none": "New picture"}[r.level] %}
+  <div class="tile {{ r.level }}">
+    {% if it.thumb %}<img src="{{ it.thumb }}" alt="">{% else %}<div class="nothumb">{{ r.file_type|upper }}</div>{% endif %}
+    <div class="tile-body">
+      <span class="pill {{ r.level }}">{{ verdict }}</span>
+      <div class="fname" title="{{ it.name }}">{{ it.name }}</div>
+      {% for f in r.flags %}
+        <p class="why">{{ f.message }}</p>
+        {% for m in f.matches[:4] %}<p class="match">&#8627; {{ m.file_name }} <small>({{ "identical" if m.distance == 0 else "difference " ~ m.distance ~ "/64" }}, {{ m.uploaded_at }})</small></p>{% endfor %}
+      {% else %}
+        <p class="muted">Not seen before. Remembered for next time.</p>
+      {% endfor %}
+      {% for w in r.warnings %}<p class="warn">&#9888; {{ w }}</p>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+</div>
+<div id="pool" class="pool" hx-swap-oob="true">{% include "_poc_pool.html" %}</div>

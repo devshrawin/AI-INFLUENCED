@@ -1,0 +1,2 @@
+<span><strong>{{ stored }}</strong> picture{{ "" if stored == 1 else "s" }} remembered</span>
+{% if stored %}<button class="link" hx-post="/poc/reset" hx-target="#pool" hx-confirm="Forget all remembered pictures?">Clear</button>{% endif %}

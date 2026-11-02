@@ -1,0 +1,26 @@
+{% set main = r.flags|rejectattr("level", "equalto", "info")|list %}
+{% set infos = r.flags|selectattr("level", "equalto", "info")|list %}
+{% set verdict = {"high": "AI-generated", "review": "Possibly AI", "none": "No AI signs found"}[r.level] %}
+<div class="card result {{ r.level }}">
+  {% if thumb %}<img class="thumb" src="{{ thumb }}" alt="">{% endif %}
+  <div class="body">
+    <div class="verdict"><span class="pill {{ r.level }}">{{ verdict }}</span><span class="fname">{{ r.filename }}</span></div>
+    {% if main %}
+    <ul class="flags">
+      {% for f in main|sort(attribute="level") %}
+      <li class="{{ f.level }}">{{ f.message }}{% if f.target != "file" %} <small>({{ f.target }})</small>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No signed credential and no AI tool named in the file's information.
+       Screenshots and forwarded images lose this data, so this does not prove the file is genuine.</p>
+    {% endif %}
+    {% if infos %}<ul class="notes">{% for f in infos %}<li>{{ f.message }}</li>{% endfor %}</ul>{% endif %}
+    {% for w in r.warnings %}<p class="warn">&#9888; {{ w }}</p>{% endfor %}
+    <details><summary>File details</summary>
+      <p class="muted">{{ r.file_type }} &middot; {{ r.size }} bytes<br>SHA-256 <code>{{ r.sha256 }}</code></p>
+      {% if r.metadata %}<table>{% for k, v in r.metadata.items() %}<tr><td><code>{{ k }}</code></td><td>{{ v }}</td></tr>{% endfor %}</table>
+      {% else %}<p class="muted">No metadata in this file.</p>{% endif %}
+    </details>
+  </div>
+</div>

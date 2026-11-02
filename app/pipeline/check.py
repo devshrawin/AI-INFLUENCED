@@ -154,34 +154,16 @@ def duplicate_flags(db: Session, vf: ValidatedFile, sub: Submission, phash: int 
     return flags
 
 
-# ----------------------------------------------------------------- main entry
-def check_file(
-    vf: ValidatedFile, sub: Submission, db: Session, settings: Settings | None = None
-) -> CheckResult:
-    settings = settings or get_settings()
-    started = time.monotonic()
-    warnings: list[str] = []
+# ----------------------------------------------------------------- shared steps
+def _metadata_flags(vf: ValidatedFile, settings: Settings) -> tuple[list[Flag], dict[str, str], list[str]]:
+    """AI-influence flags from the file's metadata (and, for documents, embedded images)."""
     trust = settings.c2pa_trust_anchors_file
-
     prov, meta = check_provenance(vf.data, vf.mime, trust)
     flags = provenance_flags(prov, "file")
-
-    phash: int | None = None
-    if vf.is_image:
-        if sub.doc_type == "photo":
-            treated_as = "photo"
-        elif sub.doc_type == "document":
-            treated_as = "document"
-        else:
-            treated_as = "document" if fingerprint.looks_like_document(vf.data) else "photo"
-        if treated_as == "photo":
-            phash = fingerprint.phash(vf.data)
-            if phash is None:
-                warnings.append("The image is almost blank, so it was not compared with other photos.")
-    else:
-        treated_as = "document"
+    notes: list[str] = []
+    if not vf.is_image:
         doc = extract_document(vf.kind, vf.data, settings.max_embedded_images)
-        warnings += doc.notes
+        notes += doc.notes
         meta.update({f"Doc:{k}": v for k, v in doc.metadata.items()})
         doc_prov = ProvenanceResult()
         check_document_metadata(doc.metadata, doc_prov)
@@ -190,13 +172,78 @@ def check_file(
             mime = "image/png" if blob[:4] == b"\x89PNG" else "image/jpeg"
             img_prov, _ = check_provenance(blob, mime, trust)
             flags += provenance_flags(img_prov, f"embedded image {i}")
+    return flags, meta, notes
 
-    if treated_as == "document" and vf.is_image:
+
+def _classify(vf: ValidatedFile, doc_type: str, warnings: list[str]) -> tuple[str, int | None]:
+    """Decide photo vs document and fingerprint photos. Returns (treated_as, phash)."""
+    if not vf.is_image:
+        return "document", None
+    if doc_type in ("photo", "document"):
+        treated_as = doc_type
+    else:
+        treated_as = "document" if fingerprint.looks_like_document(vf.data) else "photo"
+    phash: int | None = None
+    if treated_as == "photo":
+        phash = fingerprint.phash(vf.data)
+        if phash is None:
+            warnings.append("The image is almost blank, so it was not compared with other photos.")
+    else:
         warnings.append(
             "Treated as a document (scan or photo of paper): only exact copies of the same file "
             "are detected, because different documents with the same printed layout look alike."
         )
+    return treated_as, phash
 
+
+# ----------------------------------------------------------------- PoC entry points
+@dataclass
+class PartialResult:
+    """Result of a single check (AI only, or duplicates only) for the PoC page."""
+
+    filename: str
+    sha256: str
+    file_type: str
+    size: int
+    level: str
+    flags: list[Flag]
+    treated_as: str = ""
+    warnings: list[str] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
+
+
+def ai_check(vf: ValidatedFile, settings: Settings | None = None) -> PartialResult:
+    """AI influence from metadata only. Stores nothing."""
+    settings = settings or get_settings()
+    flags, meta, notes = _metadata_flags(vf, settings)
+    return PartialResult(vf.filename, vf.sha256, vf.kind, vf.size, overall_level(flags), flags,
+                         warnings=notes, metadata=meta)  # fmt: skip
+
+
+def duplicate_check(vf: ValidatedFile, sub: Submission, db: Session, settings: Settings | None = None
+                    ) -> PartialResult:  # fmt: skip
+    """Compare with all earlier uploads from other applicants, then remember this one."""
+    settings = settings or get_settings()
+    warnings: list[str] = []
+    treated_as, phash = _classify(vf, sub.doc_type, warnings)
+    flags = duplicate_flags(db, vf, sub, phash, settings)
+    duplicates.register(
+        db, application_id=sub.application_id, applicant_id=sub.applicant_id, scheme=sub.scheme,
+        file_name=vf.filename, part="file", kind=treated_as, sha256=vf.sha256,
+        phash=fingerprint.to_hex(phash) if phash is not None else None,
+    )  # fmt: skip
+    return PartialResult(vf.filename, vf.sha256, vf.kind, vf.size, overall_level(flags), flags,
+                         treated_as=treated_as, warnings=warnings)  # fmt: skip
+
+
+# ----------------------------------------------------------------- main entry
+def check_file(
+    vf: ValidatedFile, sub: Submission, db: Session, settings: Settings | None = None
+) -> CheckResult:
+    settings = settings or get_settings()
+    started = time.monotonic()
+    flags, meta, warnings = _metadata_flags(vf, settings)
+    treated_as, phash = _classify(vf, sub.doc_type, warnings)
     flags += duplicate_flags(db, vf, sub, phash, settings)
     duplicates.register(
         db,

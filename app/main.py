@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api import admin, auth, pages, platform
+from app.api import platform, poc
 from app.api.limiter import limiter
 from app.api.templating import render
 from app.auth.passwords import hash_password
@@ -147,9 +147,7 @@ def create_app(start_background: bool = True) -> FastAPI:
         return render(request, "_error.html", {"message": "Please fill in all required fields."}, 422)
 
     app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
-    app.include_router(auth.router)
-    app.include_router(pages.router)
-    app.include_router(admin.router)
+    app.include_router(poc.router)  # login-free PoC page; the old login/admin pages are not mounted
     app.include_router(platform.router)
 
     @app.get("/healthz", include_in_schema=False)
