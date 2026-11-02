@@ -26,7 +26,7 @@ from __future__ import annotations
 import io
 import math
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 
 _N = 32  # working size
 _K = 8  # low-frequency block -> 64 bits
@@ -72,12 +72,40 @@ def from_hex(s: str) -> int:
     return int(s, 16)
 
 
+_DOC_LIGHT_SHARE = 0.55
+
+
+def _light_share(img: Image.Image) -> float:
+    """Share of light pixels after stretching contrast (paper is mostly light)."""
+    px = _pixels(ImageOps.autocontrast(img, cutoff=2))
+    return sum(p > 200 for p in px) / len(px)
+
+
 def looks_like_document(data: bytes) -> bool:
     """Heuristic: a scan or photo of paper is mostly light background with
     dark ink. Contrast is stretched first so grey phone photos of paper
-    still count. When unsure we say "document", which only switches off
-    visual matching (no false flags)."""
-    img = ImageOps.autocontrast(_open(data).resize((128, 128)), cutoff=2)
-    px = _pixels(img)
-    light = sum(p > 200 for p in px) / len(px)
-    return light > 0.55
+    still count."""
+    return _light_share(_open(data).resize((128, 128))) > _DOC_LIGHT_SHARE
+
+
+def classify(data: bytes) -> str:
+    """"photo" or "document", chosen so that editing the file does not change the answer.
+
+    A plain `looks_like_document` flips on common edits: brightening a photo by
+    30% or adding a caption bar pushed about half of our test photos over the
+    line, and the edited copy then skipped visual matching. So an image counts
+    as a document only if it still does after a brightness change either way,
+    a black caption bar and a white border. Anything unstable is a photo.
+    """
+    base = _open(data).resize((128, 128))
+    barred = base.copy()
+    ImageDraw.Draw(barred).rectangle((0, 118, 128, 128), fill=0)
+    framed = ImageOps.expand(base, border=8, fill=255)
+    views = [
+        base,
+        ImageEnhance.Brightness(base).enhance(1.3),
+        ImageEnhance.Brightness(base).enhance(0.75),
+        barred,
+        framed,
+    ]
+    return "document" if all(_light_share(v) > _DOC_LIGHT_SHARE for v in views) else "photo"

@@ -176,22 +176,29 @@ def _metadata_flags(vf: ValidatedFile, settings: Settings) -> tuple[list[Flag], 
 
 
 def _classify(vf: ValidatedFile, doc_type: str, warnings: list[str]) -> tuple[str, int | None]:
-    """Decide photo vs document and fingerprint photos. Returns (treated_as, phash)."""
+    """Decide photo vs document and fingerprint the image. Returns (treated_as, phash).
+
+    Every image is fingerprinted unless the platform says it is a document, and is
+    compared with earlier PHOTOS even when it looks like a document: an edited copy of
+    a photo (brightened, captioned) can look like paper, and must still be found.
+    Documents are only ever matched visually against photos, never against each other.
+    """
     if not vf.is_image:
         return "document", None
     if doc_type in ("photo", "document"):
         treated_as = doc_type
     else:
-        treated_as = "document" if fingerprint.looks_like_document(vf.data) else "photo"
+        treated_as = fingerprint.classify(vf.data)
     phash: int | None = None
-    if treated_as == "photo":
+    if doc_type != "document":
         phash = fingerprint.phash(vf.data)
-        if phash is None:
+        if phash is None and treated_as == "photo":
             warnings.append("The image is almost blank, so it was not compared with other photos.")
-    else:
+    if treated_as == "document":
         warnings.append(
-            "Treated as a document (scan or photo of paper): only exact copies of the same file "
-            "are detected, because different documents with the same printed layout look alike."
+            "Looks like a scan or photo of paper: compared with earlier photos, but with other "
+            "documents only as exact copies, because different documents with the same printed "
+            "layout look alike."
         )
     return treated_as, phash
 
